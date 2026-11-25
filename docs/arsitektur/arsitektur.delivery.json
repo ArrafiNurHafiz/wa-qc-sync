@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "d557db6f-4465-4fb2-84dd-b50a54f005ae",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/home/arrafi/Proyek/QC/docs/arsitektur/arsitektur.archify.json",
+  "output": "/home/arrafi/Proyek/QC/docs/arsitektur/arsitektur.html",
+  "specification": {
+    "sha256": "4fd377b98b0c301a74f331738697f3a9c16f412f35799d7c4bbf9ae51b613566",
+    "bytes": 5971
+  },
+  "artifact": {
+    "sha256": "124845c2116f996a5f0b4f0742d7efdc61d2c1b895c82b712e83b89ae273ea2d",
+    "bytes": 949117
+  }
+}

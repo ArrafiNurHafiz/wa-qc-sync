@@ -1,0 +1,191 @@
+{
+  "project": "wa-qc-sync",
+  "version": "1.0.0",
+  "updated": "2026-11-26",
+  "prd_ref": "PRD.md@v1.0",
+  "tech_stack": {
+    "frontend": ["HTML5", "CSS3 (Design Tokens)", "Vanilla JavaScript (ES6+)"],
+    "backend": ["Node.js 18+ (ESM)", "Express 5", "@whiskeysockets/baileys", "fastest-levenshtein", "axios", "pino", "qrcode"],
+    "database": ["Google Sheets (REKAP_QC_KUNJUNGAN, REKAP_QC_DETAIL_ITEM, LOG_KERUSAKAN)", "Google Drive (Salinan Form DOK. QC-WOOD-01 & PDF)", "Local JSON Queue (message_queue.json)"],
+    "infra": ["Google Apps Script Web App (gas/Code_QC.gs)", "Local/LAN Node Process (Port 3001)"]
+  },
+  "layers": [
+    {
+      "id": "presentation",
+      "name": "Web UI & Mobile Form",
+      "folders": ["public"],
+      "depends_on": ["web-api"]
+    },
+    {
+      "id": "api-gateway",
+      "name": "Web Server & WhatsApp Runtime",
+      "folders": ["src/web", "src/runtime"],
+      "depends_on": ["domain", "cloud-gas"]
+    },
+    {
+      "id": "domain",
+      "name": "QC Domain, Parser & Matcher",
+      "folders": ["src/qc"],
+      "depends_on": []
+    },
+    {
+      "id": "cloud-gas",
+      "name": "Google Drive & Sheets Apps Script",
+      "folders": ["gas"],
+      "depends_on": []
+    }
+  ],
+  "modules": [
+    {
+      "id": "qc-domain",
+      "folder": "src/qc",
+      "responsibility": "Kamus master SKU/Vendor/14 Kriteria QC, fuzzy matcher Levenshtein, validator hitungan (diperiksa -> rusak -> lolos) & standar MC, serta parser pesan WhatsApp #QC.",
+      "fr_refs": ["FR-001", "FR-002", "FR-003", "FR-004", "FR-010"],
+      "depends_on": [],
+      "exposes": [
+        "PRODUCT_MASTER",
+        "VENDORS_PRE",
+        "VENDORS_FIN",
+        "QC_CRITERIA",
+        "syncDictionaryFromWebhook()",
+        "matchProduct()",
+        "matchVendorWithConfidence()",
+        "matchCriterion()",
+        "validateQcReport()",
+        "parseQcMessage()",
+        "getHelpText()",
+        "getCriteriaText()"
+      ],
+      "agent_file": "src/qc/agents.md"
+    },
+    {
+      "id": "runtime-gateway",
+      "folder": "src/runtime",
+      "responsibility": "Entrypoint bot WhatsApp Baileys, persistensi sesi auth, manajemen konfigurasi lokal, store konfirmasi #OK, offline queue retry 30s, dan HTTP client ke GAS Webhook.",
+      "fr_refs": ["FR-001", "FR-002", "FR-003", "FR-008", "FR-010"],
+      "depends_on": ["qc-domain", "web-api", "gas-drive-writer"],
+      "exposes": [
+        "startBot()",
+        "startWebOnly()",
+        "appConfig",
+        "isChatAllowed()",
+        "MessageQueue",
+        "CorrectionStore",
+        "sendToGasWebhook()",
+        "checkGasStatus()"
+      ],
+      "agent_file": "src/runtime/agents.md"
+    },
+    {
+      "id": "web-api",
+      "folder": "src/web",
+      "responsibility": "Express 5 HTTP API (port 3001) untuk status/kontrol WA, submit & riwayat laporan QC, void laporan, sinkronisasi master, dan pengaturan webhook.",
+      "fr_refs": ["FR-004", "FR-008", "FR-009", "FR-010", "FR-011"],
+      "depends_on": ["qc-domain", "runtime-gateway", "gas-drive-writer"],
+      "exposes": [
+        "startWebServer()",
+        "updateWebQR()",
+        "updateWebStatus()",
+        "registerBotControls()",
+        "notifyDataMutation()"
+      ],
+      "agent_file": "src/web/agents.md"
+    },
+    {
+      "id": "web-ui",
+      "folder": "public",
+      "responsibility": "Antarmuka Web Command Center & Mobile QC Input Form: QR Pairing, Form multi-item & multi-kerusakan, Riwayat + link Google Drive, dan Pengaturan.",
+      "fr_refs": ["FR-009", "FR-011"],
+      "depends_on": ["web-api"],
+      "exposes": [
+        "index.html",
+        "style.css",
+        "app.js"
+      ],
+      "agent_file": "public/agents.md"
+    },
+    {
+      "id": "gas-drive-writer",
+      "folder": "gas",
+      "responsibility": "Google Apps Script Web App untuk menyalin template Form QC Lap di Google Drive, mengisi sel DOK. QC-WOOD-01 (+ tab tambahan >4 item), ekspor PDF opsional, tulis REKAP_QC_*, dan void laporan.",
+      "fr_refs": ["FR-005", "FR-006", "FR-007", "FR-008", "FR-010", "FR-011"],
+      "depends_on": [],
+      "exposes": [
+        "doGet(e)",
+        "doPost(e)",
+        "setupQcTemplate()",
+        "handleLogQcReport()",
+        "handleGetQcDashboard()",
+        "handleVoidQcReport()",
+        "handleGetMasterData()"
+      ],
+      "agent_file": "gas/agents.md"
+    }
+  ],
+  "data_flows": [
+    {
+      "from": "Petugas QC (WhatsApp)",
+      "to": "runtime-gateway -> qc-domain",
+      "description": "Pesan #QC masuk via Baileys, di-parse (multi-item/1-baris), di-fuzzy-match ke SKU/Vendor/Kriteria, dan divalidasi hitungan Diperiksa -> Rusak -> Lolos."
+    },
+    {
+      "from": "Petugas / Admin (Web Form)",
+      "to": "web-ui -> web-api -> qc-domain",
+      "description": "Input form mobile/desktop dikirim ke POST /api/qc/reports lalu melewati validator domain yang sama dengan WhatsApp."
+    },
+    {
+      "from": "runtime-gateway / web-api",
+      "to": "gas-drive-writer",
+      "description": "Payload tervalidasi dikirim via HTTPS POST (fallback ke message_queue.json bila offline) ke Google Apps Script Webhook."
+    },
+    {
+      "from": "gas-drive-writer",
+      "to": "Google Drive & Google Sheets",
+      "description": "GAS menyalin master template Form QC Lap di Drive, mengisi sel DOK. QC-WOOD-01, membuat PDF opsional, menulis rekap ke REKAP_QC_*, dan mengembalikan sheetUrl + pdfUrl."
+    }
+  ],
+  "run_commands": {
+    "install": "npm install",
+    "dev": "npm run web",
+    "start": "npm start",
+    "test": "npm test",
+    "lint": "",
+    "build": ""
+  },
+  "external_integrations": [
+    {
+      "name": "WhatsApp Multi-Device (@whiskeysockets/baileys)",
+      "purpose": "Menerima pesan #QC/#HELP/#KRITERIA/#PRODUK/#VENDOR/#STATUS/#OK dan membalas ringkasan + link Google Drive."
+    },
+    {
+      "name": "Google Apps Script Web App (DriveApp + SpreadsheetApp)",
+      "purpose": "Menulis salinan form DOK. QC-WOOD-01 ke Google Drive, export PDF opsional, serta menulis REKAP_QC_KUNJUNGAN, REKAP_QC_DETAIL_ITEM, dan LOG_KERUSAKAN."
+    }
+  ],
+  "decisions": [
+    {
+      "id": "ADR-001",
+      "title": "Stack Node.js ESM + Baileys + Express 5 + GAS Webhook",
+      "reason": "Menyamakan stack dengan proyek /home/arrafi/Proyek/wa agar kamus master, pola antrean offline, dan operasional di KWaS konsisten serta ringan.",
+      "status": "accepted"
+    },
+    {
+      "id": "ADR-002",
+      "title": "Penulisan Form DOK. QC-WOOD-01 Langsung di Google Drive via Apps Script",
+      "reason": "Sesuai kebutuhan user agar output berbentuk seperti form Excel referensi yang tersimpan di Google Drive melalui Apps Script, sekaligus memiliki Spreadsheet Rekap Pusat untuk agregasi data.",
+      "status": "accepted"
+    },
+    {
+      "id": "ADR-003",
+      "title": "Pemisahan Domain Murni (src/qc) dari Runtime/Web (src/runtime, src/web)",
+      "reason": "Memudahkan unit test cepat tanpa dependensi socket WhatsApp atau server HTTP, serta menjaga kontrak antar-modul tetap bersih.",
+      "status": "accepted"
+    },
+    {
+      "id": "ADR-004",
+      "title": "Isolasi Port (3001) & Sesi WA serta Tidak Auto-Mutasi Stok Proyek wa di v1",
+      "reason": "Mencegah tabrakan port/sesi bila berjalan berdampingan dengan proyek wa dan menghindari double-entry dengan laporan mutasi mandor.",
+      "status": "accepted"
+    }
+  ]
+}

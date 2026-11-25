@@ -1,0 +1,222 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Arsitektur Sistem wa-qc-sync (KWaS QC Lapangan)",
+    "output": "docs/arsitektur/arsitektur.html",
+    "feedback_links": false,
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "wa_field",
+      "type": "external",
+      "label": "Petugas QC (WhatsApp)",
+      "sublabel": "Chat #QC / #OK",
+      "tag": "Lokasi Vendor",
+      "pos": [40, 60],
+      "size": [175, 64]
+    },
+    {
+      "id": "web_ui",
+      "type": "frontend",
+      "label": "Web & Mobile Form",
+      "sublabel": "public/ (:3001)",
+      "tag": "web-ui",
+      "explanation": "Antarmuka responsif QR pairing WA, form input QC multi-item & multi-kerusakan, riwayat laporan, dan pengaturan webhook.",
+      "pos": [40, 350],
+      "size": [175, 64]
+    },
+    {
+      "id": "runtime_gw",
+      "type": "backend",
+      "label": "Runtime & Gateway",
+      "sublabel": "src/runtime/ (Baileys)",
+      "tag": "runtime-gateway",
+      "explanation": "Koneksi WhatsApp Baileys, persistensi auth, konfirmasi #OK, antrean offline, dan klien HTTP GAS Webhook.",
+      "pos": [315, 60],
+      "size": [180, 64]
+    },
+    {
+      "id": "offline_q",
+      "type": "messagebus",
+      "label": "Offline Queue & Token",
+      "sublabel": "message_queue.json",
+      "tag": "Retry 30s",
+      "pos": [315, 205],
+      "size": [180, 64]
+    },
+    {
+      "id": "web_api",
+      "type": "backend",
+      "label": "Web API Server",
+      "sublabel": "src/web/ (Express 5)",
+      "tag": "web-api",
+      "pos": [315, 350],
+      "size": [180, 64]
+    },
+    {
+      "id": "qc_domain",
+      "type": "security",
+      "label": "QC Domain & Validator",
+      "sublabel": "src/qc/ (Parser & Rules)",
+      "tag": "qc-domain",
+      "explanation": "Domain murni tanpa I/O: fuzzy match SKU/Vendor/14 Kriteria, validasi Diperiksa -> Rusak -> Lolos, dan ambang MC <= 15%/17%.",
+      "pos": [595, 205],
+      "size": [190, 64]
+    },
+    {
+      "id": "gas_writer",
+      "type": "cloud",
+      "label": "Apps Script Webhook",
+      "sublabel": "gas/Code_QC.gs",
+      "tag": "gas-drive-writer",
+      "explanation": "Menyalin template Form QC Lap di Google Drive, mengisi sel DOK. QC-WOOD-01 (+ tab >4 item), ekspor PDF opsional, dan tulis REKAP_QC_*.",
+      "pos": [885, 60],
+      "size": [180, 64]
+    },
+    {
+      "id": "gdrive_docs",
+      "type": "database",
+      "label": "Google Drive Form",
+      "sublabel": "DOK. QC-WOOD-01 + PDF",
+      "tag": "makeCopy Template",
+      "pos": [1200, 60],
+      "size": [185, 64]
+    },
+    {
+      "id": "gsheets_rekap",
+      "type": "database",
+      "label": "Google Sheets Rekap",
+      "sublabel": "REKAP_QC_* & LOG",
+      "tag": "Master & Audit",
+      "pos": [1200, 205],
+      "size": [185, 64]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Node.js Lokal / LAN KWaS (:3001)",
+      "wraps": ["runtime_gw", "offline_q", "web_api", "qc_domain"]
+    },
+    {
+      "kind": "region",
+      "label": "Google Workspace Cloud",
+      "wraps": ["gas_writer", "gdrive_docs", "gsheets_rekap"]
+    }
+  ],
+  "connections": [
+    {
+      "id": "wa-to-runtime",
+      "from": "wa_field",
+      "to": "runtime_gw",
+      "label": "Chat #QC / #OK",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ui-to-api",
+      "from": "web_ui",
+      "to": "web_api",
+      "label": "HTTP JSON",
+      "variant": "emphasis"
+    },
+    {
+      "id": "runtime-to-queue",
+      "from": "runtime_gw",
+      "to": "offline_q",
+      "label": "Antre offline",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "api-to-queue",
+      "from": "web_api",
+      "to": "offline_q",
+      "label": "Fallback queue",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "runtime-to-gas",
+      "from": "runtime_gw",
+      "to": "gas_writer",
+      "label": "POST payload QC",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "runtime-to-domain",
+      "from": "runtime_gw",
+      "to": "qc_domain",
+      "label": "Parse & validasi",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "api-to-domain",
+      "from": "web_api",
+      "to": "qc_domain",
+      "label": "Validasi form",
+      "fromSide": "right",
+      "toSide": "bottom"
+    },
+    {
+      "id": "api-to-gas",
+      "from": "web_api",
+      "to": "gas_writer",
+      "label": "Submit / Void / Rekap",
+      "fromSide": "bottom",
+      "toSide": "bottom"
+    },
+    {
+      "id": "gas-to-drive",
+      "from": "gas_writer",
+      "to": "gdrive_docs",
+      "label": "Salin template + PDF",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "gas-to-sheets",
+      "from": "gas_writer",
+      "to": "gsheets_rekap",
+      "label": "Append rekap & log",
+      "fromSide": "right",
+      "toSide": "left"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Kanal Input Lapangan",
+      "items": [
+        "WhatsApp Bot (#QC multi-item & 1-baris) + Web Form (:3001)",
+        "Fuzzy matching SKU/Vendor/14 Kriteria + konfirmasi #OK <TOKEN>",
+        "Terisolasi dari port 3000 dan saldo DASHBOARD_STOK proyek wa"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Aturan & Ketahanan",
+      "items": [
+        "Validasi Diperiksa -> Rincian Kerusakan -> Lolos & MC <= 15%/17%",
+        "Antrean offline message_queue.json (atomic write, retry 30s)",
+        "Idempotency key mencegah salinan file ganda di Drive"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Output Google Drive",
+      "items": [
+        "GAS LockService menyalin Master Template Form QC Lap di Drive",
+        "Auto-tab tambahan bila > 4 item + opsi ekspor PDF siap cetak",
+        "Ringkasan tercatat ke REKAP_QC_KUNJUNGAN & LOG_KERUSAKAN"
+      ]
+    }
+  ]
+}
