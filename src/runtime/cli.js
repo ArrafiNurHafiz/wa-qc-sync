@@ -347,6 +347,9 @@ function registerPidCleanup(pidPath) {
   process.once("exit", cleanup);
   process.once("SIGINT", () => { cleanup(); process.exit(0); });
   process.once("SIGTERM", () => { cleanup(); process.exit(0); });
+  if (!process.stdin.isTTY) {
+    process.on("SIGHUP", () => {});
+  }
 }
 
 function openBrowserUrl(url) {
@@ -380,6 +383,7 @@ async function startBackgroundDaemon(dataDir, opts, activePort) {
 
   const child = spawn(process.execPath, childArgs, {
     detached: true,
+    windowsHide: true,
     stdio: ["ignore", logFd, logFd],
     env: { ...process.env, WA_QC_HOME: dataDir, PORT: String(activePort) }
   });

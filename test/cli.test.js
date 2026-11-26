@@ -152,6 +152,11 @@ test("CLI wa-qc-sync berjalan via symlink global (setup non-interaktif + doctor)
     assert.equal(statusRes.status, 0);
     assert.match(statusRes.stdout, /berjalan di latar belakang/i);
 
+    // Pastikan daemon tetap hidup meski menerima SIGHUP (simulasi terminal ditutup)
+    const pidData = JSON.parse(readFileSync(join(dataDir, "qc-kwas.pid"), "utf8"));
+    process.kill(pidData.pid, "SIGHUP");
+    await new Promise((r) => setTimeout(r, 150));
+
     const html = await fetch("http://127.0.0.1:3197/").then((r) => r.text());
     assert.match(html, /<title>/);
 
