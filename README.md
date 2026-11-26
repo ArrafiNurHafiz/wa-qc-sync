@@ -65,11 +65,11 @@ wa-qc-sync/
 - Akun Google Workspace dengan Apps Script Web App ([`gas/Code_QC.gs`](gas/Code_QC.gs)).
 
 ### Opsi A — Install Global CLI (`wa-qc-sync`)
-1. Dari GitHub langsung (membutuhkan `--allow-git=all` pada npm v12+ karena dependensi `libsignal` pada Baileys 6.x):
+1. Pasang langsung secara global *(membutuhkan `--allow-git=all` pada npm v12+ karena dependensi `libsignal` pada Baileys 6.x)*:
    ```bash
-   npm install -g --allow-git=all github:ArrafiNurHafiz/wa-qc-sync
+   npm install -g --allow-git=all wa-qc-sync
    ```
-   *(Atau jika dari dalam folder proyek yang sudah di-clone, cukup `npm install -g .` karena `.npmrc` sudah menyertakan `allow-git=all`.)*
+   *(Atau pasang langsung dari GitHub / folder clone lokal: `npm install -g --allow-git=all github:ArrafiNurHafiz/wa-qc-sync` atau `npm install -g .` dari dalam folder proyek.)*
 2. Jalankan wizard setup awal & diagnostik dari folder mana pun:
    ```bash
    wa-qc-sync setup
