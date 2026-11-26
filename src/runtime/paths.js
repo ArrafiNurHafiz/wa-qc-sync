@@ -90,6 +90,14 @@ export function getAuthDir(dataDir = getDataDir()) {
   return path.join(dataDir, "auth_info_baileys");
 }
 
+export function getPidPath(dataDir = getDataDir()) {
+  return path.join(dataDir, "qc-kwas.pid");
+}
+
+export function getLogPath(dataDir = getDataDir()) {
+  return path.join(dataDir, "qc-kwas.log");
+}
+
 export function loadEnvFile(dataDir = getDataDir()) {
   const envPath = getEnvPath(dataDir);
   if (fs.existsSync(envPath)) {

@@ -24,6 +24,8 @@ test("parseCliArgs mengurai subcommand dan flag CLI dengan akurat", () => {
   assert.deepEqual(parseCliArgs([]), {
     command: "start",
     webOnly: false,
+    foreground: false,
+    noOpen: false,
     dataDir: null,
     port: null,
     gasUrl: null,
@@ -32,9 +34,11 @@ test("parseCliArgs mengurai subcommand dan flag CLI dengan akurat", () => {
     nonInteractive: false
   });
 
-  const parsed = parseCliArgs(["--web", "-p", "3010", "--data-dir=/tmp/qc-data"]);
+  const parsed = parseCliArgs(["--web", "-f", "--no-open", "-p", "3010", "--data-dir=/tmp/qc-data"]);
   assert.equal(parsed.command, "web");
   assert.equal(parsed.webOnly, true);
+  assert.equal(parsed.foreground, true);
+  assert.equal(parsed.noOpen, true);
   assert.equal(parsed.port, 3010);
   assert.equal(parsed.dataDir, "/tmp/qc-data");
 
@@ -134,6 +138,26 @@ test("CLI wa-qc-sync berjalan via symlink global (setup non-interaktif + doctor)
     assert.match(docRes.stdout, /\[PASS\] Node\.js/);
     assert.match(docRes.stdout, /\[PASS\] Port 3199/);
     assert.match(docRes.stdout, /\[PASS\] GAS Webhook/);
+
+    // Uji mode background otomatis: qc-kwas web --port 3197 --no-open -> status -> fetch HTML -> stop
+    const bgStart = await runProcess(
+      binSymlink,
+      ["web", "--port", "3197", "--no-open", "--data-dir", dataDir],
+      { cwd: base, env, encoding: "utf8" }
+    );
+    assert.equal(bgStart.status, 0, bgStart.stderr);
+    assert.match(bgStart.stdout, /berjalan di latar belakang/i);
+
+    const statusRes = await runProcess(binSymlink, ["status", "--data-dir", dataDir], { cwd: base, env, encoding: "utf8" });
+    assert.equal(statusRes.status, 0);
+    assert.match(statusRes.stdout, /berjalan di latar belakang/i);
+
+    const html = await fetch("http://127.0.0.1:3197/").then((r) => r.text());
+    assert.match(html, /<title>/);
+
+    const stopRes = await runProcess(binSymlink, ["stop", "--data-dir", dataDir], { cwd: base, env, encoding: "utf8" });
+    assert.equal(stopRes.status, 0, stopRes.stderr);
+    assert.match(stopRes.stdout, /berhasil dihentikan/i);
   } finally {
     await new Promise((r) => server.close(r));
     rmSync(base, { recursive: true, force: true });

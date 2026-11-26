@@ -70,16 +70,14 @@ wa-qc-sync/
    npm install -g --allow-git=all qc-kwas
    ```
    *(Atau pasang langsung dari GitHub / folder clone lokal: `npm install -g --allow-git=all github:ArrafiNurHafiz/wa-qc-sync` atau `npm install -g .` dari dalam folder proyek.)*
-2. Jalankan wizard setup awal & diagnostik dari folder mana pun:
+2. Langsung jalankan (otomatis berjalan di latar belakang & membuka Web Command Center di `http://localhost:3001`, tidak wajib setup terminal dulu):
    ```bash
-   qc-kwas setup
-   qc-kwas doctor
+   qc-kwas          # Jalankan Bot WA + Web UI di latar belakang
+   qc-kwas status   # Cek status proses
+   qc-kwas logs     # Lihat log terbaru
+   qc-kwas stop     # Hentikan proses latar belakang
    ```
-3. Jalankan aplikasi:
-   ```bash
-   qc-kwas          # Bot WhatsApp + Web Command Center (:3001)
-   qc-kwas web      # Web Command Center saja (tanpa koneksi WA)
-   ```
+   *(Anda dapat langsung menempelkan URL Web App GAS di tab **Pengaturan** Web UI & memindai QR WhatsApp di tab **Gateway WA**. Tersedia juga `qc-kwas web` untuk mode Web saja, `qc-kwas run` untuk foreground, serta `qc-kwas setup` / `qc-kwas doctor` bila butuh setup terminal.)*
    Saat dijalankan sebagai CLI global di luar folder proyek, sesi WhatsApp (`auth_info_baileys/`), `.env`, `config.json`, dan `message_queue.json` otomatis disimpan rapi di `~/.qc-kwas` (bisa diubah via `--data-dir <folder>` atau env `WA_QC_HOME`) sehingga tidak bentrok dengan proyek lain.
 
 ### Opsi B — Jalankan Langsung di Folder Proyek
