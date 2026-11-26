@@ -11,6 +11,7 @@ Menyediakan HTTP API dan static file server Express 5 (port default `3001`) untu
 - [`/home/arrafi/RAFI/agent.md`](/home/arrafi/RAFI/agent.md)
 - [`../../PRD.md`](../../PRD.md) (FR-004, FR-008, FR-009, FR-010, FR-011)
 - [`../../docs/arsitektur/arsitektur.json`](../../docs/arsitektur/arsitektur.json)
+- [`../../docs/arsitektur/kontrak_api.md`](../../docs/arsitektur/kontrak_api.md)
 
 ## Interface (Kontrak)
 Ekspor: `startWebServer()`, `updateWebQR()`, `updateWebStatus()`, `registerBotControls()`, `notifyDataMutation()`.
@@ -31,4 +32,4 @@ Ekspor: `startWebServer()`, `updateWebQR()`, `updateWebStatus()`, `registerBotCo
 | `gas-drive-writer` | `gas` | Target aksi dashboard, log QC, & void | [`../../gas/agents.md`](../../gas/agents.md) |
 
 ## Catatan Sinkronisasi
-2026-11-26 | Acuan: `PRD.md@v1.0`, `arsitektur.json@v1.0.0`
+2026-11-26 | Acuan: `PRD.md@v1.1`, `arsitektur.json@v1.0.1`

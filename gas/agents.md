@@ -12,6 +12,8 @@ Menampung Google Apps Script Web App (`Code_QC.gs`) yang dijalankan di Google Wo
 - [`../PRD.md`](../PRD.md) (FR-005, FR-006, FR-007, FR-008, FR-010, FR-011)
 - [`../docs/referensi/Form Lap QC Lap-cetak.xlsx`](../docs/referensi/Form%20Lap%20QC%20Lap-cetak.xlsx)
 - [`../docs/arsitektur/arsitektur.json`](../docs/arsitektur/arsitektur.json)
+- [`../docs/arsitektur/kontrak_api.md`](../docs/arsitektur/kontrak_api.md)
+- [`../docs/panduan/setup_gas_drive.md`](../docs/panduan/setup_gas_drive.md)
 
 ## Interface (Kontrak)
 Webhook actions: `doGet(e)`, `doPost(e)` (`LOG_QC_REPORT`, `GET_QC_DASHBOARD`, `VOID_QC_REPORT`, `GET_MASTER_DATA`) + fungsi manual `setupQcTemplate()`.
@@ -30,4 +32,4 @@ Webhook actions: `doGet(e)`, `doPost(e)` (`LOG_QC_REPORT`, `GET_QC_DASHBOARD`, `
 | `web-api` | `src/web` | Pengirim request dashboard, submit, & void | [`../src/web/agents.md`](../src/web/agents.md) |
 
 ## Catatan Sinkronisasi
-2026-11-26 | Acuan: `PRD.md@v1.0`, `arsitektur.json@v1.0.0`
+2026-11-26 | Acuan: `PRD.md@v1.1`, `arsitektur.json@v1.0.1`

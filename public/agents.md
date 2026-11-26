@@ -30,4 +30,4 @@ Berkas: `index.html`, `style.css`, `app.js` berkomunikasi ke endpoint HTTP di `s
 | `web-api` | `src/web` | Penyedia endpoint JSON `/api/*` | [`../src/web/agents.md`](../src/web/agents.md) |
 
 ## Catatan Sinkronisasi
-2026-11-26 | Acuan: `PRD.md@v1.0`, `design_system.md@v1.0`, `arsitektur.json@v1.0.0`
+2026-11-26 | Acuan: `PRD.md@v1.1`, `design_system.md@v1.0`, `arsitektur.json@v1.0.1`

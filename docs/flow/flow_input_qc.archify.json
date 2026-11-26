@@ -1,0 +1,266 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Alur Input & Pemrosesan QC Lapangan KWaS (Gaya 4 - FORM QC)",
+    "output": "docs/flow/flow_input_qc.html",
+    "feedback_links": false,
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "external": { "label": "Petugas / Lapangan" },
+        "frontend": { "label": "Template FORM QC / Web" },
+        "backend": { "label": "Pencocokan Master" },
+        "security": { "label": "Validasi & Koreksi" },
+        "messagebus": { "label": "Antrean & Webhook" },
+        "cloud": { "label": "Google Drive & Sheets" }
+      }
+    }
+  },
+  "lanes": [
+    { "id": "lapangan", "label": "Petugas QC (WA Seluler / Web Kantor)" },
+    { "id": "validasi", "label": "Validasi & Pencocokan Sistem (src/qc)" },
+    { "id": "output", "label": "Apps Script & Google Drive (gas)" },
+    { "id": "pengecualian", "label": "Koreksi Input & Antrean Offline", "variant": "exception" }
+  ],
+  "phases": [
+    { "id": "intake", "label": "1. Input Gaya 4 (FORM QC)", "fromCol": 0, "toCol": 1 },
+    { "id": "cek", "label": "2. Validasi & Hitung", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "simpan", "label": "3. Tulis Drive & Rekap", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "groups": [
+    { "id": "grp_input", "label": "Ketik 'qc' -> Salin & Isi Angka", "lane": "lapangan", "fromCol": 0, "toCol": 1, "variant": "emphasis" },
+    { "id": "grp_engine", "label": "Aturan Domain QC", "lane": "validasi", "fromCol": 2, "toCol": 3, "variant": "default" },
+    { "id": "grp_recovery", "label": "Koreksi & Ketahanan", "lane": "pengecualian", "fromCol": 2, "toCol": 4, "variant": "security" },
+    { "id": "grp_cloud", "label": "Eksekusi Google Workspace", "lane": "output", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": [
+    "minta_template",
+    "isi_form_qc",
+    "cek_master",
+    "validasi_hitung",
+    "kirim_gas",
+    "tulis_drive",
+    "kirim_bukti"
+  ],
+  "nodes": [
+    {
+      "id": "minta_template",
+      "lane": "lapangan",
+      "col": 0,
+      "type": "external",
+      "label": "Ketik 'qc' di WA",
+      "sublabel": "Bot kirim template kosong",
+      "icon": "person",
+      "explanation": "Petugas mengetik 'qc' (atau '#QC') di WhatsApp saat di lokasi vendor; bot langsung membalas template FORM QC dengan 14 kriteria sudah tertulis."
+    },
+    {
+      "id": "isi_form_qc",
+      "lane": "lapangan",
+      "col": 1,
+      "type": "frontend",
+      "label": "Salin & Isi Angka",
+      "sublabel": "Kosong=aman, '-'=N/A",
+      "tag": "Gaya 4 (FORM QC)",
+      "icon": "frontend",
+      "explanation": "Petugas menyalin FORM QC, mengisi Vendor, PO, Barang, Tahap, Periksa, MC %, dan mengisi angka hanya pada jenis kerusakan yang terjadi (atau via Web Form :3001 di kantor)."
+    },
+    {
+      "id": "kirim_bukti",
+      "lane": "lapangan",
+      "col": 5,
+      "type": "external",
+      "label": "Terima Bukti Drive",
+      "sublabel": "Ringkasan + URL Sheet/PDF",
+      "icon": "success",
+      "explanation": "Petugas menerima balasan WA berisi hitungan otomatis (Diperiksa, Rusak, Lolos, Keputusan) dan tautan file Google Sheet & PDF di Google Drive."
+    },
+    {
+      "id": "cek_master",
+      "lane": "validasi",
+      "col": 2,
+      "type": "backend",
+      "label": "Cocokkan Master",
+      "sublabel": "SKU, Vendor, 14 Kriteria",
+      "icon": "backend",
+      "explanation": "Parser FORM QC mencocokkan Barang (66 SKU Raw Body), Vendor Pre/Fin, dan memetakan baris kriteria (angka -> NOK, kosong -> OK, '-' -> NA)."
+    },
+    {
+      "id": "validasi_hitung",
+      "lane": "validasi",
+      "col": 3,
+      "type": "security",
+      "label": "Validasi Hitung & MC",
+      "sublabel": "Lolos = Periksa - Rusak",
+      "tag": "MC <= 15% / 17%",
+      "icon": "security",
+      "explanation": "Memeriksa Total Rusak <= Periksa, menghitung Lolos otomatis, memvalidasi batas MC (Unfinish <= 15%, Finish <= 17%), dan menentukan Keputusan."
+    },
+    {
+      "id": "perlu_konfirmasi",
+      "lane": "pengecualian",
+      "col": 2,
+      "type": "security",
+      "label": "Konfirmasi #OK",
+      "sublabel": "Typo Barang / Vendor",
+      "icon": "decision",
+      "explanation": "Jika nama Barang atau Vendor mirip sebagian (skor 0.50-0.89), bot meminta konfirmasi #OK <6-HEX> (TTL 5 menit) sebelum menulis ke Drive."
+    },
+    {
+      "id": "input_ditolak",
+      "lane": "pengecualian",
+      "col": 3,
+      "type": "security",
+      "label": "Minta Perbaikan",
+      "sublabel": "Angka / MC tak valid",
+      "icon": "failure",
+      "explanation": "Input ditolak bila total rusak > diperiksa, Barang/Vendor tidak dikenali (< 0.50), atau MC melanggar batas dengan status Lolos penuh."
+    },
+    {
+      "id": "antre_offline",
+      "lane": "pengecualian",
+      "col": 4,
+      "type": "messagebus",
+      "label": "Antre Offline",
+      "sublabel": "Retry tiap 30 detik",
+      "tag": "message_queue.json",
+      "icon": "waiting",
+      "explanation": "Jika jaringan seluler atau GAS sedang gangguan, payload disimpan aman ke message_queue.json dan dicoba ulang otomatis tiap 30 detik."
+    },
+    {
+      "id": "kirim_gas",
+      "lane": "output",
+      "col": 4,
+      "type": "messagebus",
+      "label": "Kirim ke GAS",
+      "sublabel": "Payload + idempotencyKey",
+      "icon": "messagebus",
+      "explanation": "Mengirim laporan tervalidasi via HTTPS POST ke Google Apps Script Web App disertai kunci idempotensi anti-double entry."
+    },
+    {
+      "id": "tulis_drive",
+      "lane": "output",
+      "col": 5,
+      "type": "cloud",
+      "label": "Tulis Drive & Rekap",
+      "sublabel": "DOK. QC-WOOD-01 + PDF",
+      "icon": "cloud",
+      "explanation": "GAS menyalin Master Template Form QC Lap di Google Drive (auto-tab >4 item), ekspor PDF opsional, dan mengisi REKAP_QC_* + LOG_KERUSAKAN."
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_template_isi",
+      "from": "minta_template",
+      "to": "isi_form_qc",
+      "label": "kirim FORM QC",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_input_master",
+      "from": "isi_form_qc",
+      "to": "cek_master",
+      "label": "kirim hasil isi",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_master_konfirmasi",
+      "from": "cek_master",
+      "to": "perlu_konfirmasi",
+      "label": "skor 0.50-0.89",
+      "variant": "security",
+      "role": "branch"
+    },
+    {
+      "id": "e_konfirmasi_validasi",
+      "from": "perlu_konfirmasi",
+      "to": "validasi_hitung",
+      "label": "balas #OK",
+      "variant": "default",
+      "role": "return",
+      "fromSide": "right",
+      "toSide": "bottom"
+    },
+    {
+      "id": "e_master_validasi",
+      "from": "cek_master",
+      "to": "validasi_hitung",
+      "label": "cocok",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_validasi_ditolak",
+      "from": "validasi_hitung",
+      "to": "input_ditolak",
+      "label": "tidak valid",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e_validasi_gas",
+      "from": "validasi_hitung",
+      "to": "kirim_gas",
+      "label": "data valid",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_gas_offline",
+      "from": "kirim_gas",
+      "to": "antre_offline",
+      "label": "offline / 5xx",
+      "variant": "dashed",
+      "role": "error"
+    },
+    {
+      "id": "e_offline_drive",
+      "from": "antre_offline",
+      "to": "tulis_drive",
+      "label": "retry berhasil",
+      "variant": "dashed",
+      "role": "async"
+    },
+    {
+      "id": "e_gas_drive",
+      "from": "kirim_gas",
+      "to": "tulis_drive",
+      "label": "online",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_drive_bukti",
+      "from": "tulis_drive",
+      "to": "kirim_bukti",
+      "label": "balas URL Drive",
+      "variant": "emphasis",
+      "role": "return"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Pola Input Terpilih: Gaya 4 (FORM QC)",
+      "items": [
+        "Petugas ketik 'qc' (atau '#QC') -> bot kirim template berisi 14 kriteria standar",
+        "Tinggal Salin, isi Vendor/Barang/Periksa/MC, dan tulis angka di jenis yang rusak",
+        "Baris kosong = aman (centang), '-' atau 'NA' = tidak berlaku, multi-item dipisah '---'"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Otomatis oleh Sistem (Tidak Perlu Diketik)",
+      "items": [
+        "Tanggal & Petugas QC terisi otomatis dari waktu dan nomor WhatsApp pengirim",
+        "Lolos = Periksa - Total Rusak, Keputusan (Lolos/Bersyarat/Tolak), & Catatan Singkat",
+        "Web Command Center (:3001) tersedia untuk admin kantor & aksi Void laporan"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Output Google Drive & Rekap",
+      "items": [
+        "1 file salinan Form QC Lap (DOK. QC-WOOD-01) per kunjungan (+ tab baru jika > 4 item) & opsi PDF",
+        "3 sheet rekap terpusat: REKAP_QC_KUNJUNGAN, REKAP_QC_DETAIL_ITEM, LOG_KERUSAKAN"
+      ]
+    }
+  ]
+}

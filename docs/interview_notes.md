@@ -23,8 +23,10 @@ Tanggal: 2026-11-26 | Mode: A (Proyek Baru) | Status: Terdokumentasi untuk Perse
 
 ---
 
-## 3. Asumsi yang Ditetapkan ke `PRD.md`
-1. **Dual-Input (WA + Web Form):** Mendukung pelaporan melalui WhatsApp (`#QC` multi-baris *exception-first* & format cepat 1-baris) dan Web Form mobile-friendly (Port `3001`) agar pengisian 14 kriteria dan rincian jumlah kerusakan di HP maupun PC tetap nyaman.
+## 3. Asumsi & Keputusan UX yang Ditetapkan ke `PRD.md`
+1. **Dual-Input (WA Lapangan + Web Kantor):**
+   - **WhatsApp (`Gaya 4 — FORM QC`):** Disesuaikan ulang pada sesi lanjutan (`2026-11-26`) karena petugas di lokasi vendor memakai kuota seluler dan menolak format `#KODE | ...` atau hafalan nama cacat. Petugas cukup ketik `qc` → bot balas template `FORM QC` berisi 14 kriteria → petugas salin & isi angka pada jenis yang rusak saja.
+   - **Web & Mobile Form (`:3001`):** Digunakan untuk admin/tim QA di jaringan kantor (atau via tunnel bila diaktifkan) untuk input detail, pemantauan riwayat, dan aksi Void.
 2. **Pemisahan dengan Sistem Stok `wa`:** Pada v1, automasi QC tidak langsung memotong/menambah saldo `DASHBOARD_STOK` proyek `wa` untuk mencegah *double entry* dengan laporan `#PRE`/`#FIN`/`#REJECT` mandor.
 3. **Output Drive Terstruktur & Reversibel:** Default menghasilkan 1 Google Sheet terisi per kunjungan/PO (berdasarkan template `Form QC Lap` yang diunggah ke Drive) + ekspor PDF (`GENERATE_PDF=true`, dapat dimatikan via konfigurasi GAS) + 1 baris rekap di Spreadsheet Pusat (`REKAP_QC`).
 4. **Master Data Bersama:** Menggunakan master 66+ SKU Raw Body dan daftar vendor KWaS yang sama dengan proyek `wa`, serta mendukung sinkronisasi dinamis dari Google Sheets.

@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KWaS QC Command — Field Quality Control &amp; Drive Sync</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="shell">
+    <!-- Top HUD Navigation -->
+    <header class="hud-bar">
+      <div class="hud-left">
+        <div class="brand-cluster">
+          <div class="brand-mark" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 11l3 3L22 4"/>
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+            </svg>
+          </div>
+          <div class="brand-info">
+            <h1 class="brand-title">KWaS QC COMMAND</h1>
+            <span class="brand-sub">DOK. QC-WOOD-01 &middot; Node :3001</span>
+          </div>
+        </div>
+
+        <nav class="pill-nav" aria-label="Navigasi utama">
+          <button type="button" class="nav-pill active" data-tab="tab-wa">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            <span>Gateway WA</span>
+          </button>
+          <button type="button" class="nav-pill" data-tab="tab-input">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            <span>Input QC</span>
+          </button>
+          <button type="button" class="nav-pill" data-tab="tab-history">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <span>Riwayat &amp; Rekap</span>
+          </button>
+          <button type="button" class="nav-pill" data-tab="tab-settings">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span>Pengaturan</span>
+          </button>
+        </nav>
+      </div>
+
+      <div class="hud-right">
+        <div class="metric-cluster">
+          <div class="metric-block">
+            <span class="metric-label">LAPORAN AKTIF</span>
+            <span class="metric-val mono" id="heroReportCount">--</span>
+          </div>
+          <div class="metric-block">
+            <span class="metric-label">PASS RATE</span>
+            <span class="metric-val mono" id="heroPassRate">--%</span>
+          </div>
+        </div>
+
+        <div class="wa-badge" id="waBadge" aria-live="polite">
+          <span class="pulse-beacon" id="pulseBeacon"></span>
+          <span class="wa-status-text mono" id="statusText">DISCONNECTED</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="viewport">
+      <!-- TAB 1: GATEWAY WHATSAPP & PANDUAN GAYA 4 -->
+      <section id="tab-wa" class="view-panel active">
+        <div class="gateway-grid">
+          <div class="card core-scanner">
+            <div class="card-head">
+              <span class="card-tag">WHATSAPP GATEWAY</span>
+              <h2 class="card-title">Tautkan Perangkat WhatsApp QC</h2>
+              <p class="card-desc">Gunakan nomor WA khusus QC (terpisah dari proyek stok) lalu pindai QR di bawah untuk mulai menerima template <code>FORM QC</code>.</p>
+            </div>
+
+            <div class="matrix-chamber">
+              <div class="scanner-frame">
+                <div class="corner c-tl"></div>
+                <div class="corner c-tr"></div>
+                <div class="corner c-bl"></div>
+                <div class="corner c-br"></div>
+
+                <div class="chamber-state" id="chamberPending">
+                  <div class="radar-scan"></div>
+                  <span class="mono-tip">MENUNGGU KONEKSI WA...</span>
+                </div>
+
+                <img id="qrImage" class="matrix-canvas hidden" src="" alt="QR Pairing WhatsApp QC" />
+
+                <div class="chamber-state chamber-active hidden" id="chamberConnected">
+                  <div class="connected-mark">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  </div>
+                  <span class="mono-success">GATEWAY ONLINE</span>
+                  <span class="mono-sub" id="waUserDetail">Siap menerima laporan</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="action-dock">
+              <button type="button" class="btn btn-neutral" id="btnRestartWa">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+                <span>Restart Socket</span>
+              </button>
+              <button type="button" class="btn btn-destruct" id="btnLogoutWa">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+                <span>Putus Sesi</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Panduan Format Gaya 4 -->
+          <div class="card core-protocol">
+            <div class="protocol-header">
+              <div>
+                <span class="card-tag">PROTOKOL LAPANGAN &middot; GAYA 4</span>
+                <h2 class="card-title">Template Input WhatsApp (<code>FORM QC</code>)</h2>
+                <p class="card-desc">Petugas cukup ketik <strong>qc</strong>, salin template kosong yang dikirim bot, lalu isi angka jumlah rusak pada baris cacat saja.</p>
+              </div>
+              <div class="protocol-actions">
+                <div class="proto-tab-pills" role="tablist" aria-label="Pilih contoh template">
+                  <button type="button" class="proto-pill active" data-proto-mode="empty">Template Kosong</button>
+                  <button type="button" class="proto-pill" data-proto-mode="example">Contoh Kerusakan</button>
+                  <button type="button" class="proto-pill" data-proto-mode="multi">Multi-Item (---)</button>
+                </div>
+                <button type="button" class="btn btn-primary" id="btnCopyTemplate">Salin Template</button>
+              </div>
+            </div>
+
+            <div class="proto-flow-spotlight">
+              <div class="pfs-left">
+                <span class="pfs-badge">TIPS LAPANGAN</span>
+                <div class="pfs-desc">
+                  <span class="pfs-lead">Baris kosong = aman (✓) &middot; Tanda "-" = tidak berlaku (–)</span>
+                  <span class="pfs-sub">Baris kriteria yang tidak bermasalah boleh dibiarkan kosong atau dihapus sebelum dikirim.</span>
+                </div>
+              </div>
+              <div class="pfs-actions">
+                <button type="button" class="btn btn-neutral" id="btnOpenHelp">Lihat #HELP</button>
+                <button type="button" class="btn btn-neutral" id="btnOpenCriteria">14 Kriteria (#KRITERIA)</button>
+              </div>
+            </div>
+
+            <div class="pbc-snippet-box">
+              <pre class="snippet-content mono" id="protoSnippetCode"></pre>
+            </div>
+
+            <div class="proto-command-hud">
+              <span class="pch-label">PINTASAN WHATSAPP:</span>
+              <div class="pch-items">
+                <button type="button" class="pch-chip" data-copy-cmd="qc"><span class="mono chip-cmd">qc</span><span class="chip-desc">Minta Template</span></button>
+                <button type="button" class="pch-chip" data-copy-cmd="#HELP"><span class="mono chip-cmd">#HELP</span><span class="chip-desc">Panduan</span></button>
+                <button type="button" class="pch-chip" data-copy-cmd="#KRITERIA"><span class="mono chip-cmd">#KRITERIA</span><span class="chip-desc">14 Kriteria &amp; MC</span></button>
+                <button type="button" class="pch-chip" data-copy-cmd="#PRODUK"><span class="mono chip-cmd">#PRODUK</span><span class="chip-desc">66 SKU</span></button>
+                <button type="button" class="pch-chip" data-copy-cmd="#VENDOR"><span class="mono chip-cmd">#VENDOR</span><span class="chip-desc">Daftar Vendor</span></button>
+                <button type="button" class="pch-chip" data-copy-cmd="#STATUS"><span class="mono chip-cmd">#STATUS</span><span class="chip-desc">Cek GAS</span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: INPUT QC FORM (MOBILE & DESKTOP) -->
+      <section id="tab-input" class="view-panel">
+        <div class="panel-hero">
+          <div>
+            <span class="card-tag">FORM PEMERIKSAAN LAPANGAN &middot; DOK. QC-WOOD-01</span>
+            <h2 class="panel-title">Input Laporan QC Baru</h2>
+            <p class="panel-desc">Validasi otomatis hitungan <strong>Diperiksa &rarr; Kerusakan &rarr; Lolos</strong> &amp; kadar air (MC Mentah &le; 15%, MC Jadi &le; 17%).</p>
+          </div>
+          <div class="panel-actions">
+            <button type="button" class="btn btn-neutral" id="btnResetQcForm">Reset Form</button>
+          </div>
+        </div>
+
+        <div id="submitResultBanner" class="result-banner hidden" aria-live="polite"></div>
+
+        <form id="qcReportForm" novalidate>
+          <!-- Metadata Kunjungan -->
+          <div class="card form-section">
+            <div class="section-head">
+              <h3 class="card-title">1. Informasi Kunjungan &amp; Dokumen</h3>
+            </div>
+            <div class="form-grid-3">
+              <div class="field-item">
+                <label class="field-label" for="qcVendor">NAMA VENDOR / LOKASI *</label>
+                <input type="text" id="qcVendor" class="field-input" list="vendorDatalist" placeholder="Pilih atau ketik vendor (cth: Londo)" required autocomplete="off">
+                <datalist id="vendorDatalist"></datalist>
+                <span class="field-error hidden" id="errQcVendor"></span>
+              </div>
+              <div class="field-item">
+                <label class="field-label" for="qcPo">NO. DOKUMEN / PO</label>
+                <input type="text" id="qcPo" class="field-input mono" placeholder="PO-2026-112" autocomplete="off">
+              </div>
+              <div class="field-item">
+                <label class="field-label" for="qcTanggal">TANGGAL PEMERIKSAAN</label>
+                <input type="date" id="qcTanggal" class="field-input mono">
+              </div>
+              <div class="field-item">
+                <label class="field-label" for="qcPetugas">NAMA PETUGAS QC</label>
+                <input type="text" id="qcPetugas" class="field-input" placeholder="Nama pemeriksa QC">
+              </div>
+              <div class="field-item">
+                <label class="field-label" for="qcDiketahui">DIKETAHUI VENDOR / GUDANG</label>
+                <input type="text" id="qcDiketahui" class="field-input" placeholder="Opsional">
+              </div>
+              <div class="field-item">
+                <label class="field-label" for="qcCatatanUmum">CATATAN UMUM KUNJUNGAN</label>
+                <input type="text" id="qcCatatanUmum" class="field-input" placeholder="Catatan umum kunjungan...">
+              </div>
+            </div>
+          </div>
+
+          <!-- Daftar Item QC -->
+          <div id="qcItemsContainer" class="items-stack"></div>
+          <datalist id="productDatalist"></datalist>
+
+          <div class="form-footer-bar card">
+            <div class="footer-left">
+              <button type="button" class="btn btn-neutral" id="btnAddQcItem">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                <span>Tambah Item Lain</span>
+              </button>
+              <span class="field-hint" id="multiTabHint">Maks. 4 item per halaman form; lebih dari 4 item otomatis membuat tab tambahan di Google Sheet.</span>
+            </div>
+            <div class="footer-right">
+              <button type="submit" class="btn btn-primary btn-submit-lg" id="btnSubmitQc">
+                <span class="btn-spinner hidden" id="submitSpinner" aria-hidden="true"></span>
+                <span id="submitBtnLabel">Simpan ke Google Drive</span>
+              </button>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <!-- TAB 3: RIWAYAT & REKAP QC -->
+      <section id="tab-history" class="view-panel">
+        <div class="panel-hero">
+          <div>
+            <span class="card-tag">REKAP TERPUSAT GOOGLE SHEETS</span>
+            <h2 class="panel-title">Riwayat Kunjungan &amp; Dokumen Drive</h2>
+            <p class="panel-desc">Pantau laporan masuk dari WhatsApp maupun Web Form, buka file <code>DOK. QC-WOOD-01</code>, atau batalkan laporan salah input.</p>
+          </div>
+          <div class="panel-actions">
+            <div class="search-field">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input type="text" id="historySearch" placeholder="Cari vendor, PO, no laporan..." aria-label="Cari riwayat laporan QC">
+            </div>
+            <select id="historyFilterDecision" class="field-input filter-select" aria-label="Filter keputusan">
+              <option value="">Semua Keputusan</option>
+              <option value="Lolos">Lolos</option>
+              <option value="Bersyarat">Bersyarat</option>
+              <option value="Tolak">Tolak</option>
+            </select>
+            <button type="button" class="btn btn-neutral" id="btnRefreshHistory">Refresh</button>
+          </div>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="card kpi-card">
+            <span class="metric-label">TOTAL KUNJUNGAN</span>
+            <span class="kpi-val mono" id="kpiTotalReports">0</span>
+          </div>
+          <div class="card kpi-card">
+            <span class="metric-label">TOTAL DIPERIKSA</span>
+            <span class="kpi-val mono" id="kpiTotalInspected">0 pcs</span>
+          </div>
+          <div class="card kpi-card">
+            <span class="metric-label">TOTAL RUSAK</span>
+            <span class="kpi-val mono kpi-err" id="kpiTotalDefect">0 pcs</span>
+          </div>
+          <div class="card kpi-card">
+            <span class="metric-label">PASS RATE</span>
+            <span class="kpi-val mono kpi-ok" id="kpiPassRate">100%</span>
+          </div>
+        </div>
+
+        <div id="historyNotice" class="info-banner hidden"></div>
+
+        <div class="table-frame">
+          <table class="grid-table">
+            <thead>
+              <tr>
+                <th>TANGGAL</th>
+                <th>NO. LAPORAN</th>
+                <th>VENDOR &amp; PO</th>
+                <th class="num-col">ITEM</th>
+                <th class="num-col">DIPERIKSA</th>
+                <th class="num-col">RUSAK</th>
+                <th class="num-col">LOLOS</th>
+                <th>KEPUTUSAN</th>
+                <th>STATUS</th>
+                <th>FILE DRIVE</th>
+                <th class="text-right">AKSI</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody">
+              <tr><td colspan="11" class="empty-state">Memuat riwayat laporan QC...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 4: PENGATURAN & ANTREAN OFFLINE -->
+      <section id="tab-settings" class="view-panel">
+        <div class="panel-hero">
+          <div>
+            <span class="card-tag">KONFIGURASI SISTEM</span>
+            <h2 class="panel-title">Webhook Google Apps Script &amp; Antrean Offline</h2>
+            <p class="panel-desc">Hubungkan aplikasi ke deployment <code>gas/Code_QC.gs</code>, atur whitelist grup WA, dan kelola retry antrean lokal.</p>
+          </div>
+        </div>
+
+        <div class="settings-grid">
+          <div class="card">
+            <div class="card-head">
+              <span class="card-tag">LANGKAH 1 &middot; SETUP CLOUD</span>
+              <h3 class="card-title">Koneksi Google Apps Script</h3>
+            </div>
+
+            <div class="settings-guide">
+              <ol class="guide-steps">
+                <li>Unggah <code>Form Lap QC Lap-cetak.xlsx</code> ke Google Drive dan pilih <strong>Simpan sebagai Google Sheets</strong>.</li>
+                <li>Buat Spreadsheet Rekap Pusat, buka <strong>Extensions &rarr; Apps Script</strong>, tempelkan isi <code>gas/Code_QC.gs</code>.</li>
+                <li>Isi <em>Script Properties</em> (<code>TEMPLATE_FILE_ID</code>, <code>OUTPUT_FOLDER_ID</code>), jalankan fungsi <strong>setupQcTemplate()</strong> satu kali.</li>
+                <li>Klik <strong>Deploy &rarr; Web app</strong> (<em>Anyone</em>) lalu tempel URL <code>/exec</code> di bawah ini.</li>
+              </ol>
+            </div>
+
+            <form id="formSettings" class="settings-form" novalidate>
+              <div class="field-item">
+                <label class="field-label" for="settingGasUrl">GAS QC WEBHOOK URL</label>
+                <div class="webhook-input-wrapper">
+                  <input type="url" id="settingGasUrl" class="field-input mono" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+                  <button type="button" class="btn btn-neutral" id="btnTestGas">Uji Koneksi</button>
+                </div>
+                <span class="field-hint">Endpoint Web App Google Apps Script untuk menyimpan form Drive &amp; rekap.</span>
+              </div>
+
+              <div class="field-item">
+                <label class="field-label" for="settingAllowedGroups">WHITELIST ID GRUP WHATSAPP (OPSIONAL)</label>
+                <input type="text" id="settingAllowedGroups" class="field-input mono" placeholder="120363xxx@g.us, 120364xxx@g.us" autocomplete="off">
+                <span class="field-hint">Kosongkan agar bot memproses semua grup/chat yang mengirim perintah QC.</span>
+              </div>
+
+              <div class="field-item">
+                <label class="field-label" for="settingApiSecret">API_SECRET OPSIONAL <span id="apiSecretBadge" class="secret-badge hidden">Tersimpan</span></label>
+                <input type="password" id="settingApiSecret" class="field-input mono" placeholder="Kosongkan jika tidak mengubah atau tidak memakai token" autocomplete="new-password">
+                <span class="field-hint">Harus cocok dengan <code>API_SECRET</code> di Script Properties GAS jika diaktifkan.</span>
+              </div>
+
+              <div class="settings-actions">
+                <button type="submit" class="btn btn-primary" id="btnSaveSettings">Simpan Pengaturan</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <span class="card-tag">OFFLINE QUEUE &middot; MESSAGE_QUEUE.JSON</span>
+              <h3 class="card-title">Status Antrean Pengiriman</h3>
+              <p class="card-desc">Laporan yang gagal terkirim karena gangguan jaringan otomatis masuk antrean dan dicoba ulang tiap 30 detik.</p>
+            </div>
+
+            <div class="queue-stats">
+              <div class="queue-stat-box">
+                <span class="metric-label">PENDING</span>
+                <span class="kpi-val mono kpi-warn" id="queuePendingCount">0</span>
+              </div>
+              <div class="queue-stat-box">
+                <span class="metric-label">TERKIRIM</span>
+                <span class="kpi-val mono kpi-ok" id="queueProcessedCount">0</span>
+              </div>
+              <div class="queue-stat-box">
+                <span class="metric-label">GAGAL PERMANEN</span>
+                <span class="kpi-val mono kpi-err" id="queueFailedCount">0</span>
+              </div>
+            </div>
+
+            <div class="queue-actions">
+              <button type="button" class="btn btn-primary" id="btnRetryQueue">Kirim Ulang Antrean Pending</button>
+              <button type="button" class="btn btn-neutral" id="btnRefreshQueue">Muat Ulang Status</button>
+            </div>
+
+            <div id="queueListContainer" class="queue-list"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MODAL: DETAIL LAPORAN (WARM WOOD DOK. QC-WOOD-01 PREVIEW) -->
+  <div class="dialog-backdrop" id="modalDetail" role="dialog" aria-modal="true" aria-labelledby="modalDetailTitle">
+    <div class="dialog-box dialog-box-wide">
+      <div class="dialog-head">
+        <div>
+          <span class="card-tag">DOK. QC-WOOD-01 &middot; PREVIEW</span>
+          <h3 class="dialog-title" id="modalDetailTitle">Detail Laporan QC</h3>
+        </div>
+        <button type="button" class="dialog-close" data-close-modal="modalDetail" aria-label="Tutup detail">&times;</button>
+      </div>
+      <div class="dialog-body" id="modalDetailBody"></div>
+      <div class="dialog-foot">
+        <button type="button" class="btn btn-neutral" data-close-modal="modalDetail">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PANDUAN #HELP / #KRITERIA -->
+  <div class="dialog-backdrop" id="modalHelp" role="dialog" aria-modal="true" aria-labelledby="modalHelpTitle">
+    <div class="dialog-box dialog-box-wide">
+      <div class="dialog-head">
+        <div>
+          <span class="card-tag">PANDUAN WHATSAPP</span>
+          <h3 class="dialog-title" id="modalHelpTitle">Panduan Input WhatsApp</h3>
+        </div>
+        <button type="button" class="dialog-close" data-close-modal="modalHelp" aria-label="Tutup panduan">&times;</button>
+      </div>
+      <div class="dialog-body">
+        <pre id="helpGuideText" class="mono guide-pre"></pre>
+      </div>
+      <div class="dialog-foot">
+        <button type="button" class="btn btn-neutral" data-close-modal="modalHelp">Tutup</button>
+        <button type="button" class="btn btn-primary" id="btnCopyModalHelp">Salin Teks</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: KONFIRMASI / VOID -->
+  <div class="dialog-backdrop" id="modalConfirm" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="dialog-box dialog-box-sm">
+      <div class="dialog-head">
+        <div>
+          <span class="card-tag" id="confirmTag">KONFIRMASI</span>
+          <h3 class="dialog-title" id="confirmTitle">Konfirmasi Aksi</h3>
+        </div>
+        <button type="button" class="dialog-close" id="confirmCloseBtn" aria-label="Tutup konfirmasi">&times;</button>
+      </div>
+      <div class="dialog-body">
+        <p id="confirmMessage" class="confirm-text"></p>
+        <div id="confirmInputGroup" class="field-item hidden">
+          <label class="field-label" for="confirmReasonInput" id="confirmInputLabel">ALASAN PEMBATALAN *</label>
+          <input type="text" id="confirmReasonInput" class="field-input" placeholder="Tuliskan alasan pembatalan...">
+          <span class="field-error hidden" id="errConfirmInput"></span>
+        </div>
+      </div>
+      <div class="dialog-foot">
+        <button type="button" class="btn btn-neutral" id="confirmCancelBtn">Batal</button>
+        <button type="button" class="btn btn-destruct" id="confirmOkBtn">Lanjutkan</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

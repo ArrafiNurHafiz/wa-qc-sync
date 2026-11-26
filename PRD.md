@@ -1,5 +1,5 @@
 # PRD — Automasi QC Lapangan KWaS (`wa-qc-sync`)
-Versi: 1.0 | Tanggal: 2026-11-26 | Status: Draft (Menunggu Persetujuan Mode A)
+Versi: 1.1 | Tanggal: 2026-11-26 | Status: Disetujui & Terimplementasi (v1.0.0)
 
 ---
 
@@ -33,7 +33,7 @@ Sistem **Automasi QC Lapangan KWaS** (`wa-qc-sync`) adalah aplikasi Node.js (Wha
 ## 4. Scope
 
 ### 4.1 In-Scope (Must-Have v1)
-- Bot WhatsApp Baileys (`#QC` format multi-baris & 1-baris cepat, `#HELP`, `#KRITERIA`, `#PRODUK`, `#VENDOR`, `#STATUS`, `#OK <TOKEN>`).
+- Bot WhatsApp Baileys dengan pola **Template `FORM QC` Isi-Angka (`Gaya 4`)**: user ketik `qc` / `#QC` kosong → bot membalas template kosong berisi 14 kriteria standar untuk disalin & diisi angkanya (mendukung multi-item dipisah `---`, penghapusan baris kosong, serta perintah bantu `#HELP`, `#KRITERIA`, `#PRODUK`, `#VENDOR`, `#STATUS`, `#OK <TOKEN>`).
 - Fuzzy matching Produk (SKU Raw Body, nama KWaS, alias), Vendor (Pre-Finishing & Finishing), dan 14 Jenis Kerusakan (+ `Lainnya`).
 - Engine validasi hitungan (`Diperiksa` → `Rusak[]` per jenis & qty → `Lolos/Diterima`), ambang Kadar Air (`MC Mentah ≤ 15%`, `MC Jadi ≤ 17%`), dan konsistensi keputusan (`Lolos` / `Bersyarat` / `Tolak`).
 - Offline Queue persisten (`message_queue.json`) dengan retry otomatis & idempotensi anti-double entry.
@@ -58,7 +58,7 @@ Sistem **Automasi QC Lapangan KWaS** (`wa-qc-sync`) adalah aplikasi Node.js (Wha
 
 | ID | Nama Fitur | Deskripsi & Acceptance Criteria yang Dapat Diuji | Prioritas |
 |---|---|---|---|
-| **FR-001** | **Parser Laporan QC WhatsApp (`#QC`)** | Mem-parse pesan `#QC` baik format multi-baris key-value (mendukung >1 item dipisah `---`) maupun format cepat 1-baris (`\|`).<br>**AC:** (1) Input 1-item dengan `Diperiksa: 1000`, `Rusak: Bluestain 30, Cutter Mark 20`, `Lolos: 950` terurai menjadi objek kunjungan dengan `items.length === 1`, `qtyDiperiksa === 1000`, `rusak.length === 2`, `qtyLolos === 950`. (2) Input multi-item dengan 2 blok `---` menghasilkan `items.length === 2`. (3) Format rusak/kosong menghasilkan pesan error panduan terstruktur. | Must |
+| **FR-001** | **Parser & Generator Template QC WhatsApp (`qc` / `FORM QC`)** | Saat user mengirim `qc` atau `#QC` kosong, bot membalas template `FORM QC` (Gaya 4) berisi header ringkas dan daftar 14 kriteria standar + `Lainnya`. Saat user mengirim template yang sudah diisi (mendukung >1 item dipisah `---` serta baris kosong dihapus/dipertahankan), parser mengurai angka kerusakan, `-`/`NA`, dan data item.<br>**AC:** (1) Pesan `qc` atau `#QC` tanpa body mengembalikan teks template `FORM QC` tanpa memanggil GAS. (2) Input `FORM QC` dengan `Periksa: 1000`, `Bluestain: 30`, `Cutter Mark: 20` (baris kriteria lain kosong/dihapus) terurai menjadi `items.length === 1`, `qtyDiperiksa === 1000`, `rusak.length === 2`, `qtyLolos === 950`. (3) Input multi-item dengan 2 blok `---` menghasilkan `items.length === 2`. (4) Nilai `-` / `NA` memetakan kriteria ke `"NA"`. (5) Format tanpa field wajib menghasilkan pesan error panduan terstruktur. | Must |
 | **FR-002** | **Perintah Bantuan & Navigasi WA** | Mendukung perintah `#HELP`, `#KRITERIA`, `#PRODUK`, `#VENDOR` (`#VENDOR PRE`/`FIN`), dan `#STATUS`.<br>**AC:** Setiap perintah mengembalikan teks bantuan yang sesuai tanpa mengirim payload ke GAS; `#STATUS` melakukan HTTP `GET` ke `GAS_QC_WEBHOOK_URL` dan melaporkan status aktif/gagal. | Must |
 | **FR-003** | **Fuzzy Matching SKU, Vendor, & Jenis Kerusakan** | Mencocokkan input ke `PRODUCT_MASTER` (SKU/nama/alias), `VENDORS_PRE`/`VENDORS_FIN`, dan 14 kriteria kerusakan (+ `Lainnya`) menggunakan `fastest-levenshtein`.<br>**AC:** (1) Exact/alias match langsung diproses. (2) Fuzzy match dengan skor `0.50 ≤ score < 0.90` untuk produk/vendor memicu token konfirmasi `#OK <6-HEX>` dengan TTL 5 menit lewat `CorrectionStore`. (3) Skor `< 0.50` ditolak dengan pesan error jelas. (4) Input jenis kerusakan di luar 14 kriteria yang tidak mirip (`< 0.50`) dipetakan ke kategori `Lainnya` dengan menyimpan teks aslinya. | Must |
 | **FR-004** | **Validasi Domain & Hitungan QC** | Memvalidasi integritas angka dan aturan standar `DOK. QC-WOOD-01`.<br>**AC:** (1) `qtyDiperiksa > 0` integer. (2) Setiap `rusak[i].qty > 0` integer, dan `sum(rusak[].qty) <= qtyDiperiksa`. (3) Jika `qtyLolos` tidak diisi, dihitung otomatis `qtyDiperiksa - totalRusak`; jika diisi eksplisit, wajib `0 <= qtyLolos <= qtyDiperiksa - totalRusak`. (4) MC Mentah > `15%` atau MC Jadi > `17%` menandai pelanggaran standar MC dan melarang keputusan `Lolos` penuh (wajib `Bersyarat`/`Tolak` + catatan). (5) Jika `totalRusak > 0` atau ada kriteria `NOK`, `catatan` atau rincian kerusakan wajib terisi. | Must |
@@ -79,14 +79,14 @@ Sistem **Automasi QC Lapangan KWaS** (`wa-qc-sync`) adalah aplikasi Node.js (Wha
 | **NFR-001** | **Keamanan & Privasi** | `.env`, `auth_info_baileys/`, `config.json` tidak ter-commit (`.gitignore`). Validasi input ketat di Node.js & GAS. Error ke user tidak membocorkan stack trace. |
 | **NFR-002** | **Keandalan & Atomisitas** | Atomic file write (`tmp` + `renameSync`) di `message_queue.json`; `LockService` (timeout 30s) di `Code_QC.gs`; zero data loss saat jaringan terputus. |
 | **NFR-003** | **Koeksistensi Sistem** | Port Web default `3001` (tidak bentrok dengan proyek `wa` di `3000`); direktori sesi WA `auth_info_baileys/` independen. |
-| **NFR-004** | **Usability Lapangan** | Target sentuh kontrol di Mobile QC Form `≥ 44×44 px`; sintaks WA *exception-first* dapat diketik dalam < 6 baris untuk kasus umum. |
+| **NFR-004** | **Usability Lapangan** | Target sentuh kontrol di Mobile QC Form `≥ 44×44 px`; di WhatsApp petugas tidak perlu menghafal 14 nama kerusakan (cukup ketik `qc`, salin `FORM QC`, dan isi angka pada baris yang rusak). |
 | **NFR-005** | **Kualitas Cetak PDF Drive** | File salinan template di Drive saat diekspor ke PDF muat rapi 1 halaman A4 Portrait per ≤ 4 item. |
 | **NFR-006** | **Testability** | Seluruh modul logika murni dan API memiliki test otomatis dengan `node --test` (0 error, lolos 2x berturut-turut). |
 
 ---
 
 ## 7. Alur Pengguna Utama
-1. **Alur WhatsApp Lapangan:** Petugas QC membuka WA di lokasi vendor → ketik `#QC` (Vendor, PO, Item, Diperiksa `1000`, Rusak `Bluestain 30, Cutter Mark 20`, Lolos `950`) → Bot parse & fuzzy match → jika ada koreksi skor `< 0.9`, bot minta balas `#OK <KODE>` → Bot validasi hitungan & MC → Bot POST ke GAS → GAS salin template di Drive, isi form `DOK. QC-WOOD-01`, buat PDF (opsional), catat ke `REKAP_QC`, kembalikan URL Drive → Bot balas ringkasan + link Drive ke grup/chat WA.
+1. **Alur WhatsApp Lapangan (`Gaya 4 — FORM QC`):** Petugas QC membuka WA di lokasi vendor → ketik `qc` → bot mengirim template `FORM QC` berisi 14 kriteria → petugas salin, isi `Vendor`, `PO`, `Barang`, `Periksa: 1000`, `MC %: 13.5`, lalu isi angka `30` di baris `Bluestain` dan `20` di `Cutter Mark` → Bot parse & fuzzy match → jika ada koreksi skor `< 0.9`, bot minta balas `#OK <KODE>` → Bot hitung `Lolos: 950` otomatis & validasi MC → Bot POST ke GAS → GAS salin template di Drive, isi form `DOK. QC-WOOD-01`, buat PDF (opsional), catat ke `REKAP_QC`, kembalikan URL Drive → Bot balas ringkasan + link Drive ke chat WA.
 2. **Alur Web Form (Mobile / Admin):** Petugas/Admin buka `http://<IP-LAN>:3001` → tab **Input QC** → isi info vendor/PO → isi item, qty diperiksa, tambahkan baris jenis kerusakan & qty rusak → nilai `Lolos` & saran `Keputusan` muncul otomatis → klik **Simpan ke Google Drive** → lihat hasil link Drive di toast & tab **Riwayat QC**.
 3. **Alur Offline / Gangguan:** Jika saat submit koneksi ke GAS terputus, payload masuk `message_queue.json` dengan status `pending` → background worker mengirim ulang otomatis tiap 30 detik → saat berhasil, bot mengirim notifikasi susulan ke chat asal + link Drive.
 
@@ -162,7 +162,7 @@ Sistem **Automasi QC Lapangan KWaS** (`wa-qc-sync`) adalah aplikasi Node.js (Wha
 ---
 
 ## 12. Kriteria Sukses (Terukur)
-1. Laporan contoh kasus (`Diperiksa: 1000`, `Rusak: Bluestain 30 + Cutter Mark 20`, `Lolos: 950`) dapat di-input via parser `#QC` WA maupun Web Form, tervalidasi akurat, dan membentuk payload GAS yang valid.
+1. Laporan contoh kasus (`Periksa: 1000`, `Bluestain: 30`, `Cutter Mark: 20`) dapat di-input via template `FORM QC` (Gaya 4) WA maupun Web Form, otomatis menghasilkan `Lolos: 950`, tervalidasi akurat, dan membentuk payload GAS yang valid.
 2. `gas/Code_QC.gs` memetakan seluruh sel form `DOK. QC-WOOD-01` dengan tepat (termasuk auto-duplikasi sheet bila > 4 item) dan menulis ke `REKAP_QC_*`.
 3. Seluruh test otomatis (`node --test test/*.test.js`) lulus 100% dalam 2 kali eksekusi berturut-turut.
 4. Web Console & Mobile Form terverifikasi berjalan dan diuji di browser nyata tanpa error console/network.
@@ -172,4 +172,5 @@ Sistem **Automasi QC Lapangan KWaS** (`wa-qc-sync`) adalah aplikasi Node.js (Wha
 ## 13. Riwayat Perubahan
 | Versi | Tanggal | Perubahan |
 |---|---|---|
+| `1.1` | `2026-11-26` | Pembaruan pola input WhatsApp ke **Gaya 4 (`FORM QC` Template Isi-Angka)** sesuai keputusan user (`docs/panduan/panduan_input_user.md`, `docs/flow/flow_input_qc.html`), serta penambahan panduan setup GAS & kontrak API. |
 | `1.0` | `2026-11-26` | Versi awal PRD berdasarkan form referensi `DOK. QC-WOOD-01`, arsitektur `/home/arrafi/Proyek/wa`, dan hasil wawancara kebutuhan user. |

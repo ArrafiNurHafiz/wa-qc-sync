@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Environment, Session, & Sensitive Credentials
+.env
+.env.local
+.env.*.local
+auth_info_baileys/
+config.json
+
+# Runtime Data & Queues
+message_queue.json
+message_queue.json.tmp.*
+*.log
+
+# Distribution & Archives
+dist/
+*.zip
+*.exe
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

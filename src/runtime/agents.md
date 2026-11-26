@@ -1,7 +1,7 @@
 # agents.md — src/runtime
 
 ## Peran Folder
-Mengelola runtime aplikasi: bot WhatsApp Baileys, persistensi sesi auth, konfigurasi lokal (`app-config.js`), store konfirmasi `#OK`, antrean offline (`message_queue.json`), dan klien HTTP GAS.
+Mengelola runtime aplikasi: bot WhatsApp Baileys, CLI global (`cli.js` + `paths.js`), persistensi sesi auth, konfigurasi lokal (`app-config.js`), store konfirmasi `#OK`, antrean offline (`message_queue.json`), dan klien HTTP GAS.
 
 ## Scope
 - **Boleh:** Koneksi Baileys & pemrosesan `messages.upsert`, penyimpanan `auth_info_baileys/` & `message_queue.json`, retry 30 detik, HTTP request ke `GAS_QC_WEBHOOK_URL`.
@@ -13,7 +13,10 @@ Mengelola runtime aplikasi: bot WhatsApp Baileys, persistensi sesi auth, konfigu
 - [`../../docs/arsitektur/arsitektur.json`](../../docs/arsitektur/arsitektur.json)
 
 ## Interface (Kontrak)
-Ekspor & entrypoint: `startBot()`, `startWebOnly()`, `appConfig`, `isChatAllowed()`, `MessageQueue`, `CorrectionStore`, `sendToGasWebhook()`, `checkGasStatus()`.
+Ekspor & entrypoint: `bootstrap()`, `startBot()`, `startWebOnly()`, `runCli()`, `resolveCliDataDir()`, `getDataDir()`, `appConfig`, `isChatAllowed()`, `MessageQueue`, `CorrectionStore`, `sendToGasWebhook()`, `checkGasStatus()`.
+
+## Validasi Lokal (CLI)
+- `node --test test/message-queue.test.js test/correction-store.test.js test/cli.test.js`
 
 ## Aturan Lokal
 - Penulisan file state (`message_queue.json`, `config.json`) harus atomic atau tahan error; jangan pernah me-log secret/credential.
@@ -30,4 +33,4 @@ Ekspor & entrypoint: `startBot()`, `startWebOnly()`, `appConfig`, `isChatAllowed
 | `gas-drive-writer` | `gas` | Mengirim payload JSON via GAS Webhook | [`../../gas/agents.md`](../../gas/agents.md) |
 
 ## Catatan Sinkronisasi
-2026-11-26 | Acuan: `PRD.md@v1.0`, `arsitektur.json@v1.0.0`
+2026-11-26 | Acuan: `PRD.md@v1.1`, `arsitektur.json@v1.0.1`

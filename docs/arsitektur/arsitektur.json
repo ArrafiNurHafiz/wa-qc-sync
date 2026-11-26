@@ -1,8 +1,8 @@
 {
   "project": "wa-qc-sync",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "updated": "2026-11-26",
-  "prd_ref": "PRD.md@v1.0",
+  "prd_ref": "PRD.md@v1.1",
   "tech_stack": {
     "frontend": ["HTML5", "CSS3 (Design Tokens)", "Vanilla JavaScript (ES6+)"],
     "backend": ["Node.js 18+ (ESM)", "Express 5", "@whiskeysockets/baileys", "fastest-levenshtein", "axios", "pino", "qrcode"],
@@ -39,7 +39,7 @@
     {
       "id": "qc-domain",
       "folder": "src/qc",
-      "responsibility": "Kamus master SKU/Vendor/14 Kriteria QC, fuzzy matcher Levenshtein, validator hitungan (diperiksa -> rusak -> lolos) & standar MC, serta parser pesan WhatsApp #QC.",
+      "responsibility": "Kamus master SKU/Vendor/14 Kriteria QC, fuzzy matcher Levenshtein, validator hitungan (diperiksa -> rusak -> lolos) & standar MC, serta generator & parser template WhatsApp FORM QC (Gaya 4).",
       "fr_refs": ["FR-001", "FR-002", "FR-003", "FR-004", "FR-010"],
       "depends_on": [],
       "exposes": [
@@ -53,6 +53,7 @@
         "matchCriterion()",
         "validateQcReport()",
         "parseQcMessage()",
+        "getQcTemplateText()",
         "getHelpText()",
         "getCriteriaText()"
       ],
@@ -61,12 +62,16 @@
     {
       "id": "runtime-gateway",
       "folder": "src/runtime",
-      "responsibility": "Entrypoint bot WhatsApp Baileys, persistensi sesi auth, manajemen konfigurasi lokal, store konfirmasi #OK, offline queue retry 30s, dan HTTP client ke GAS Webhook.",
+      "responsibility": "Entrypoint bot WhatsApp Baileys, CLI global (wa-qc-sync start/web/setup/doctor), resolusi direktori data (~/.wa-qc-sync vs lokal), persistensi sesi auth, manajemen konfigurasi lokal, store konfirmasi #OK, offline queue retry 30s, dan HTTP client ke GAS Webhook.",
       "fr_refs": ["FR-001", "FR-002", "FR-003", "FR-008", "FR-010"],
       "depends_on": ["qc-domain", "web-api", "gas-drive-writer"],
       "exposes": [
+        "bootstrap()",
         "startBot()",
         "startWebOnly()",
+        "runCli()",
+        "resolveCliDataDir()",
+        "getDataDir()",
         "appConfig",
         "isChatAllowed()",
         "MessageQueue",
@@ -126,7 +131,7 @@
     {
       "from": "Petugas QC (WhatsApp)",
       "to": "runtime-gateway -> qc-domain",
-      "description": "Pesan #QC masuk via Baileys, di-parse (multi-item/1-baris), di-fuzzy-match ke SKU/Vendor/Kriteria, dan divalidasi hitungan Diperiksa -> Rusak -> Lolos."
+      "description": "Petugas ketik 'qc' untuk menerima template FORM QC (Gaya 4), mengisi angka kerusakan, lalu mengirim kembali via Baileys untuk di-parse, fuzzy-match SKU/Vendor/14 Kriteria, dan divalidasi hitungan Diperiksa -> Rusak -> Lolos."
     },
     {
       "from": "Petugas / Admin (Web Form)",
@@ -146,6 +151,9 @@
   ],
   "run_commands": {
     "install": "npm install",
+    "global_install": "npm install -g .",
+    "setup": "npm run setup",
+    "doctor": "npm run doctor",
     "dev": "npm run web",
     "start": "npm start",
     "test": "npm test",

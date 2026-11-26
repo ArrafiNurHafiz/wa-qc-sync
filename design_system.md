@@ -1,6 +1,6 @@
 # Design System — Automasi QC Lapangan KWaS (`wa-qc-sync`)
 
-Versi: 1.0 | Tanggal: 2026-11-26 | Acuan: `PRD.md@v1.0`
+Versi: 1.0 | Tanggal: 2026-11-26 | Acuan: `PRD.md@v1.1`
 
 ---
 

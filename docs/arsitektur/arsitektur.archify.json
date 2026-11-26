@@ -12,7 +12,7 @@
       "id": "wa_field",
       "type": "external",
       "label": "Petugas QC (WhatsApp)",
-      "sublabel": "Chat #QC / #OK",
+      "sublabel": "Ketik 'qc' -> FORM QC",
       "tag": "Lokasi Vendor",
       "pos": [40, 60],
       "size": [175, 64]
@@ -111,7 +111,7 @@
       "id": "wa-to-runtime",
       "from": "wa_field",
       "to": "runtime_gw",
-      "label": "Chat #QC / #OK",
+      "label": "FORM QC / #OK",
       "variant": "emphasis"
     },
     {
@@ -195,7 +195,7 @@
       "dot": "cyan",
       "title": "Kanal Input Lapangan",
       "items": [
-        "WhatsApp Bot (#QC multi-item & 1-baris) + Web Form (:3001)",
+        "WhatsApp Bot (Gaya 4 FORM QC isi angka) + Web Form (:3001)",
         "Fuzzy matching SKU/Vendor/14 Kriteria + konfirmasi #OK <TOKEN>",
         "Terisolasi dari port 3000 dan saldo DASHBOARD_STOK proyek wa"
       ]

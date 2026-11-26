@@ -1,19 +1,20 @@
 # agents.md — src/qc
 
 ## Peran Folder
-Menyimpan logika domain murni QC Lapangan KWaS: kamus SKU/Vendor/14 Kriteria, fuzzy matcher, validator hitungan & standar MC, parser WhatsApp `#QC`, dan teks bantuan.
+Menyimpan logika domain murni QC Lapangan KWaS: kamus SKU/Vendor/14 Kriteria, fuzzy matcher, validator hitungan & standar MC, generator & parser template WhatsApp `FORM QC` (Gaya 4), dan teks bantuan.
 
 ## Scope
-- **Boleh:** Parsing pesan `#QC`, fuzzy matching teks (`fastest-levenshtein`), validasi aturan domain QC (`diperiksa`, `rusak[]`, `lolos`, MC ≤ 15%/17%), penyusunan teks `#HELP`/`#KRITERIA`.
+- **Boleh:** Generasi & parsing template `FORM QC` (`qc`/`#QC`), fuzzy matching teks (`fastest-levenshtein`), validasi aturan domain QC (`diperiksa`, `rusak[]`, `lolos`, MC ≤ 15%/17%), penyusunan teks `#HELP`/`#KRITERIA`.
 - **Dilarang:** Membuka socket WhatsApp, menjalankan HTTP server, membaca/menulis file lokal langsung (`fs`), atau memanggil webhook GAS langsung (kecuali helper sync dictionary yang menerima URL/fetcher).
 
 ## Dokumen Rujukan
 - [`/home/arrafi/RAFI/agent.md`](/home/arrafi/RAFI/agent.md)
 - [`../../PRD.md`](../../PRD.md) (FR-001 s.d. FR-004, FR-010)
+- [`../../docs/panduan/panduan_input_user.md`](../../docs/panduan/panduan_input_user.md)
 - [`../../docs/arsitektur/arsitektur.json`](../../docs/arsitektur/arsitektur.json)
 
 ## Interface (Kontrak)
-Ekspor publik: `PRODUCT_MASTER`, `VENDORS_PRE`, `VENDORS_FIN`, `QC_CRITERIA`, `syncDictionaryFromWebhook()`, `matchProduct()`, `matchVendorWithConfidence()`, `matchCriterion()`, `validateQcReport()`, `parseQcMessage()`, `getHelpText()`, `getCriteriaText()`.
+Ekspor publik: `PRODUCT_MASTER`, `VENDORS_PRE`, `VENDORS_FIN`, `QC_CRITERIA`, `syncDictionaryFromWebhook()`, `matchProduct()`, `matchVendorWithConfidence()`, `matchCriterion()`, `validateQcReport()`, `parseQcMessage()`, `getQcTemplateText()`, `getHelpText()`, `getCriteriaText()`.
 
 ## Aturan Lokal
 - Semua fungsi parser & validator harus deterministik dan dapat diuji unit via `node --test`.
@@ -29,4 +30,4 @@ Ekspor publik: `PRODUCT_MASTER`, `VENDORS_PRE`, `VENDORS_FIN`, `QC_CRITERIA`, `s
 | `web-api` | `src/web` | Konsumen validator & kamus master | [`../web/agents.md`](../web/agents.md) |
 
 ## Catatan Sinkronisasi
-2026-11-26 | Acuan: `PRD.md@v1.0`, `arsitektur.json@v1.0.0`
+2026-11-26 | Acuan: `PRD.md@v1.1`, `arsitektur.json@v1.0.1`

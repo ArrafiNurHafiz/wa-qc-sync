@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
-  "receiptId": "d557db6f-4465-4fb2-84dd-b50a54f005ae",
+  "receiptId": "6f74e580-bb3c-437b-82db-a9a940478316",
   "status": "current",
   "command": "deliver",
   "type": "architecture",
-  "input": "/home/arrafi/Proyek/QC/docs/arsitektur/arsitektur.archify.json",
-  "output": "/home/arrafi/Proyek/QC/docs/arsitektur/arsitektur.html",
+  "input": "/home/arrafi/Proyek/wa-qc-sync/docs/arsitektur/arsitektur.archify.json",
+  "output": "/home/arrafi/Proyek/wa-qc-sync/docs/arsitektur/arsitektur.html",
   "specification": {
-    "sha256": "4fd377b98b0c301a74f331738697f3a9c16f412f35799d7c4bbf9ae51b613566",
-    "bytes": 5971
+    "sha256": "1be909613a3f363c1c5f6959039cad1996d247ebbca6abc4131443ce0b759d97",
+    "bytes": 5977
   },
   "artifact": {
-    "sha256": "124845c2116f996a5f0b4f0742d7efdc61d2c1b895c82b712e83b89ae273ea2d",
-    "bytes": 949117
+    "sha256": "4b58b2652a8d744925f5cc2f6af766ea883991b22fc23a88172e473e32221c9e",
+    "bytes": 949182
   }
 }

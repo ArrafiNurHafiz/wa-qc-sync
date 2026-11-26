@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "9e244424-feee-4e6f-8f1d-ad5fa61bc5b8",
+  "status": "current",
+  "command": "deliver",
+  "type": "workflow",
+  "input": "/home/arrafi/Proyek/wa-qc-sync/docs/flow/flow_input_qc.archify.json",
+  "output": "/home/arrafi/Proyek/wa-qc-sync/docs/flow/flow_input_qc.html",
+  "specification": {
+    "sha256": "4d96a52352712701b06565dc8cf4184ed45866e4027dd5ba30a0a3dbedc6cf92",
+    "bytes": 8971
+  },
+  "artifact": {
+    "sha256": "60872cecac98afc4aeb09f527b8293d69c620d4e375a10135883860465c182e9",
+    "bytes": 952477
+  }
+}
