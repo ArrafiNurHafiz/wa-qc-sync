@@ -53,12 +53,12 @@ Menghubungkan aplikasi `wa-qc-sync` (Node.js) dengan **Google Drive** dan **Goog
 ---
 
 ## 3. Menghubungkan ke Node.js (`wa-qc-sync`)
-1. Jika menjalankan via CLI global (`npm i -g .` atau `npm i -g --allow-git=all <repo/tarball>`):
+1. Jika menjalankan via CLI global (`npm i -g --allow-git=all qc-kwas` atau `npm i -g .`):
    ```bash
-   wa-qc-sync setup
-   wa-qc-sync doctor
+   qc-kwas setup
+   qc-kwas doctor
    ```
-   Wizard `setup` otomatis membuat/mengisi `.env` dan `config.json` di `~/.wa-qc-sync` (atau folder proyek lokal) serta mengecek ping ke `/exec`.
+   Wizard `setup` otomatis membuat/mengisi `.env` dan `config.json` di `~/.qc-kwas` (atau folder proyek lokal) serta mengecek ping ke `/exec`.
 2. Atau secara manual, salin `.env.example` menjadi `.env`:
    ```env
    PORT=3001

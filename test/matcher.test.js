@@ -13,63 +13,45 @@ import {
   matchCriterion
 } from "../src/qc/matcher.js";
 
-test("kamus master memuat 66 produk, daftar vendor, dan 14 kriteria standar", () => {
-  assert.equal(PRODUCT_MASTER.length, 66);
-  assert.ok(VENDORS_PRE.length >= 13);
-  assert.ok(VENDORS_FIN.length >= 9);
+test("kamus lokal bebas database produk/vendor dan memuat 14 kriteria standar", () => {
+  assert.equal(PRODUCT_MASTER.length, 0);
+  assert.equal(VENDORS_PRE.length, 0);
+  assert.equal(VENDORS_FIN.length, 0);
   assert.equal(QC_CRITERIA.length, 14);
 });
 
-test("matchProduct mengenali SKU, nama KWaS, alias buyer, dan fuzzy score", () => {
-  const bySku = matchProduct("RB103002");
-  assert.equal(bySku?.product.sku, "RB103002");
-  assert.equal(bySku?.confidence, "sku_exact");
-  assert.equal(bySku?.requiresConfirmation, false);
+test("matchProduct mengembalikan null saat database kosong dan mencocokkan bila ada data dinamis", () => {
+  assert.equal(matchProduct("Barang Custom Apa Saja"), null);
+  PRODUCT_MASTER.push({ sku: "RB103002", nama: "Sendok Oval", kategori: "Kitchenware", alias: ["sendok oval"] });
+  try {
+    const bySku = matchProduct("RB103002");
+    assert.equal(bySku?.product.sku, "RB103002");
+    assert.equal(bySku?.confidence, "sku_exact");
 
-  const byBuyerSku = matchProduct("3106613");
-  assert.equal(byBuyerSku?.product.sku, "RB103002");
-  assert.equal(byBuyerSku?.confidence, "buyer_sku_exact");
-
-  const byAlias = matchProduct("talenanoval");
-  assert.equal(byAlias?.product.sku, "RB201001");
-  assert.equal(byAlias?.requiresConfirmation, false);
-
-  // Fuzzy high confidence (>= 0.90) langsung diproses tanpa #OK
-  const fuzzyHigh = matchProduct("Sutil Kayu Panjng");
-  assert.equal(fuzzyHigh?.product.sku, "RB102001");
-  assert.ok(fuzzyHigh.score >= 0.9);
-  assert.equal(fuzzyHigh?.requiresConfirmation, false);
-
-  // Fuzzy medium confidence (0.50 <= score < 0.90) wajib konfirmasi
-  const fuzzyMedium = matchProduct("Sutil Bsr");
-  assert.equal(fuzzyMedium?.product.sku, "RB102003");
-  assert.equal(fuzzyMedium?.confidence, "fuzzy_match");
-  assert.ok(fuzzyMedium.score >= 0.5 && fuzzyMedium.score < 0.9);
-  assert.equal(fuzzyMedium?.requiresConfirmation, true);
-
-  // Skor < 0.50 ditolak
-  assert.equal(matchProduct("Barang Asing Tidak Ada Sama Sekali"), null);
+    const fuzzyHigh = matchProduct("Sendok Ovl");
+    assert.equal(fuzzyHigh?.product.sku, "RB103002");
+    assert.ok(fuzzyHigh.score >= 0.9);
+  } finally {
+    PRODUCT_MASTER.pop();
+  }
 });
 
-test("matchVendorWithConfidence membedakan exact, perlu konfirmasi (#OK), dan ditolak (<0.50)", () => {
-  const exact = matchVendorWithConfidence("londo", "PRE");
-  assert.equal(exact?.vendor, "Londo");
-  assert.equal(exact?.confidence, "exact");
-  assert.equal(exact?.requiresConfirmation, false);
+test("matchVendorWithConfidence mengembalikan null saat database kosong dan membedakan skor bila ada data dinamis", () => {
+  assert.equal(matchVendorWithConfidence("Vendor Custom Bebas", "PRE"), null);
+  VENDORS_PRE.push("Londo", "Widodo Klaten");
+  try {
+    const exact = matchVendorWithConfidence("londo", "PRE");
+    assert.equal(exact?.vendor, "Londo");
+    assert.equal(exact?.confidence, "exact");
+    assert.equal(exact?.requiresConfirmation, false);
 
-  const autoAny = matchVendorWithConfidence("Aris");
-  assert.equal(autoAny?.vendor, "Aris");
-  assert.equal(autoAny?.requiresConfirmation, false);
-
-  // "Widodo Klten" vs "Widodo Klaten" -> 12 vs 13 chars, dist 1 => ~0.923 (auto)
-  // "Widodo Kltn" vs "Widodo Klaten" -> dist 2 / 12 => ~0.833 (requires confirmation)
-  const medium = matchVendorWithConfidence("Widodo Kltn", "PRE");
-  assert.equal(medium?.vendor, "Widodo Klaten");
-  assert.ok(medium.score >= 0.5 && medium.score < 0.9);
-  assert.equal(medium?.requiresConfirmation, true);
-
-  const rejected = matchVendorWithConfidence("Vendor Tidak Dikenal XYZ", "PRE");
-  assert.equal(rejected, null);
+    const medium = matchVendorWithConfidence("Widodo Kltn", "PRE");
+    assert.equal(medium?.vendor, "Widodo Klaten");
+    assert.ok(medium.score >= 0.5 && medium.score < 0.9);
+    assert.equal(medium?.requiresConfirmation, true);
+  } finally {
+    VENDORS_PRE.splice(0, VENDORS_PRE.length);
+  }
 });
 
 test("matchCriterion mencocokkan 14 kriteria dan fallback ke Lainnya jika < 0.50", () => {

@@ -14,7 +14,7 @@ export function getPackageRoot() {
 }
 
 export function getDefaultGlobalDataDir(homeDir = os.homedir()) {
-  return path.join(homeDir, ".wa-qc-sync");
+  return path.join(homeDir, ".qc-kwas");
 }
 
 function fileContainsText(filePath, needle) {
@@ -35,7 +35,7 @@ export function isProjectWorkspace(dir) {
   if (fs.existsSync(pkgPath)) {
     try {
       const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-      if (pkg?.name === "wa-qc-sync") return true;
+      if (pkg?.name === "qc-kwas" || pkg?.name === "wa-qc-sync") return true;
     } catch {
       // Abaikan package.json rusak
     }

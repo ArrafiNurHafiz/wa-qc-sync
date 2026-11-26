@@ -1006,7 +1006,7 @@ document.getElementById("historyTableBody")?.addEventListener("click", async (e)
         </div>
         ${items.length === 0 ? `<p class="field-hint">Rincian item tersedia pada file Google Sheet Drive di atas.</p>` : items.map((it, idx) => `
           <div class="wood-item-box">
-            <strong>Item #${idx + 1}: ${escapeHtml(it.kodeRawBody)} — ${escapeHtml(it.namaItem)}</strong>
+            <strong>Item #${idx + 1}: ${it.kodeRawBody ? `${escapeHtml(it.kodeRawBody)} — ${escapeHtml(it.namaItem)}` : escapeHtml(it.namaItem)}</strong>
             <p class="field-hint">Tahap: ${escapeHtml(it.tahapBarang)} | Diperiksa: ${it.qtyDiperiksa} | Rusak: ${it.totalRusak} | Lolos: ${it.qtyLolos} | Keputusan: <strong>${escapeHtml(it.keputusan)}</strong></p>
             <p class="field-hint">Rincian Kerusakan: ${escapeHtml(it.rincianKerusakan || "-")}</p>
             <p class="field-hint">Catatan: ${escapeHtml(it.catatanSingkat || "-")}</p>

@@ -1,10 +1,8 @@
 // src/qc/help-text.js — Generator template FORM QC (Gaya 4) dan teks bantuan WhatsApp
 import { QC_CRITERIA, MC_LIMITS } from "./dictionary.js";
 
-export function getQcTemplateText() {
-  return `FORM QC
-Vendor   : 
-PO       : 
+function buildTemplateItemBlock(index) {
+  return `[ITEM ${index}]
 Barang   : 
 Tahap    : Unfinish
 Periksa  : 
@@ -27,7 +25,23 @@ Kehalusan   :
 Lubang      : 
 Lainnya     : 
 
-Catatan  : `;
+Catatan  : 
+[Keputusan: Lolos / Bersyarat / Tolak]
+Keputusan: `;
+}
+
+export function getQcTemplateText(itemCount = 4) {
+  const count = Math.max(1, Math.min(20, parseInt(itemCount, 10) || 4));
+  const itemBlocks = [];
+  for (let i = 1; i <= count; i++) {
+    itemBlocks.push(buildTemplateItemBlock(i));
+  }
+
+  return `FORM QC
+Vendor   : 
+PO       : 
+
+${itemBlocks.join("\n---\n")}`;
 }
 
 export function getCriteriaText() {
@@ -86,14 +100,14 @@ MC %     : 13.5
 Bluestain   : 30
 Cutter Mark : 20
 Catatan  : 50 pcs disortir rework
+Keputusan: Bersyarat
 
-Sistem otomatis menghitung *Total Rusak = 50*, *Lolos = 950*, & *Keputusan = Bersyarat*, lalu menyimpan form ke Google Drive.
+Sistem otomatis menghitung *Total Rusak = 50* & *Lolos = 950*, memakai *Keputusan* manual Anda (atau otomatis bila dikosongkan), lalu menyimpan form ke Google Drive.
 
 🧭 *Perintah Bantuan:*
-• *qc* / *#QC* — Kirim template FORM QC kosong
+• *qc* / *#QC* — Kirim template FORM QC kosong (4 slot item)
 • *#KRITERIA* — Daftar 14 kriteria & batas MC
-• *#PRODUK* — Daftar ${productCount} SKU Raw Body resmi
-• *#VENDOR* — Daftar vendor (*#VENDOR PRE* / *#VENDOR FIN*)
 • *#STATUS* — Cek koneksi bot & Google Apps Script
-• *#OK <KODE>* — Konfirmasi koreksi nama barang/vendor`;
+
+_Catatan: Nama produk & vendor bebas diketik langsung (tidak memakai database master)._`;
 }

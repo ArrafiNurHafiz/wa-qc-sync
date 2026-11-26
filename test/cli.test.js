@@ -61,7 +61,7 @@ test("resolveCliDataDir mengisolasi folder proyek lain ke ~/.wa-qc-sync kecuali 
     writeFileSync(join(foreignProject, "config.json"), '{"PORT":3000}');
     assert.equal(
       resolveCliDataDir({ cwd: foreignProject, explicitDir: "", homeDir: fakeHome }),
-      join(fakeHome, ".wa-qc-sync")
+      join(fakeHome, ".qc-kwas")
     );
 
     // Folder milik wa-qc-sync (memiliki GAS_QC_WEBHOOK_URL) tetap dipakai langsung
@@ -99,7 +99,7 @@ test("CLI wa-qc-sync berjalan via symlink global (setup non-interaktif + doctor)
     const gasMockPort = server.address().port;
     const gasMockUrl = `http://127.0.0.1:${gasMockPort}/exec`;
     const cliTarget = resolve("src/runtime/cli.js");
-    const binSymlink = join(base, "wa-qc-sync");
+    const binSymlink = join(base, "qc-kwas");
     const dataDir = join(base, "qc-data");
     symlinkSync(cliTarget, binSymlink);
 
@@ -110,7 +110,7 @@ test("CLI wa-qc-sync berjalan via symlink global (setup non-interaktif + doctor)
 
     const ver = spawnSync(binSymlink, ["--version"], { cwd: base, env, encoding: "utf8" });
     assert.equal(ver.status, 0, ver.stderr);
-    assert.match(ver.stdout, /wa-qc-sync v/);
+    assert.match(ver.stdout, /qc-kwas v/);
 
     const setupRes = await runProcess(
       binSymlink,

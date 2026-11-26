@@ -58,29 +58,29 @@ wa-qc-sync/
 
 ---
 
-## 4. Cara Install & Menjalankan (`npm i` / CLI Global `wa-qc-sync`)
+## 4. Cara Install & Menjalankan (`npm i` / CLI Global `qc-kwas`)
 
 ### Prasyarat
 - **Node.js `18+`** dan **npm** (paket ini memakai `@whiskeysockets/baileys` `6.7.x` yang menarik `libsignal` dari GitHub, sehingga [`.npmrc`](.npmrc) menyertakan `allow-git=all` untuk npm v12+).
 - Akun Google Workspace dengan Apps Script Web App ([`gas/Code_QC.gs`](gas/Code_QC.gs)).
 
-### Opsi A — Install Global CLI (`wa-qc-sync`)
+### Opsi A — Install Global CLI (`qc-kwas`)
 1. Pasang langsung secara global *(membutuhkan `--allow-git=all` pada npm v12+ karena dependensi `libsignal` pada Baileys 6.x)*:
    ```bash
-   npm install -g --allow-git=all wa-qc-sync
+   npm install -g --allow-git=all qc-kwas
    ```
    *(Atau pasang langsung dari GitHub / folder clone lokal: `npm install -g --allow-git=all github:ArrafiNurHafiz/wa-qc-sync` atau `npm install -g .` dari dalam folder proyek.)*
 2. Jalankan wizard setup awal & diagnostik dari folder mana pun:
    ```bash
-   wa-qc-sync setup
-   wa-qc-sync doctor
+   qc-kwas setup
+   qc-kwas doctor
    ```
 3. Jalankan aplikasi:
    ```bash
-   wa-qc-sync          # Bot WhatsApp + Web Command Center (:3001)
-   wa-qc-sync web      # Web Command Center saja (tanpa koneksi WA)
+   qc-kwas          # Bot WhatsApp + Web Command Center (:3001)
+   qc-kwas web      # Web Command Center saja (tanpa koneksi WA)
    ```
-   Saat dijalankan sebagai CLI global di luar folder proyek, sesi WhatsApp (`auth_info_baileys/`), `.env`, `config.json`, dan `message_queue.json` otomatis disimpan rapi di `~/.wa-qc-sync` (bisa diubah via `--data-dir <folder>` atau env `WA_QC_HOME`) sehingga tidak bentrok dengan proyek lain.
+   Saat dijalankan sebagai CLI global di luar folder proyek, sesi WhatsApp (`auth_info_baileys/`), `.env`, `config.json`, dan `message_queue.json` otomatis disimpan rapi di `~/.qc-kwas` (bisa diubah via `--data-dir <folder>` atau env `WA_QC_HOME`) sehingga tidak bentrok dengan proyek lain.
 
 ### Opsi B — Jalankan Langsung di Folder Proyek
 - `npm install` — memasang dependensi (otomatis memakai `.npmrc` `allow-git=all`).

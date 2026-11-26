@@ -145,7 +145,7 @@ function printHelp(meta, dataDir) {
 ${meta.name} v${meta.version} — Automasi QC Lapangan KWaS
 
 Pemakaian:
-  wa-qc-sync [perintah] [opsi]
+  qc-kwas [perintah] [opsi]
 
 Perintah:
   start                 Jalankan Bot WhatsApp + Web Command Center (default)
@@ -272,7 +272,7 @@ export async function runDoctor(dataDir, opts = {}) {
 
   let gasOk = true;
   if (!cfg.GAS_QC_WEBHOOK_URL) {
-    console.log("[WARN] GAS Webhook   : belum dikonfigurasi (jalankan 'wa-qc-sync setup' atau atur di Web UI)");
+    console.log("[WARN] GAS Webhook   : belum dikonfigurasi (jalankan 'qc-kwas setup' atau atur di Web UI)");
   } else {
     try {
       const res = await checkGasStatus({ gasUrl: cfg.GAS_QC_WEBHOOK_URL, timeout: 10000 });

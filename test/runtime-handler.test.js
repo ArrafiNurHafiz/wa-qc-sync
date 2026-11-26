@@ -93,35 +93,25 @@ test("router WhatsApp menangani qc, #HELP, #KRITERIA, #STATUS, dan whitelist gru
   }
 });
 
-test("router WhatsApp menangani konfirmasi #OK dan fallback offline queue saat GAS gagal jaringan", async () => {
+test("router WhatsApp mengirim vendor/produk custom langsung ke GAS dan fallback offline queue saat gagal jaringan", async () => {
   const ctx = createTestRuntime();
   try {
-    // 1. Typo sedang -> minta #OK A1B2C3
+    // 1. Vendor & produk custom bebas langsung diproses ke GAS tanpa #OK
     await handleIncomingTextMessage({
       chatJid: "1203630001@g.us",
       participant: "62812@s.whatsapp.net",
       senderName: "Budi (+62812)",
-      text: `FORM QC\nVendor: Widodo Kltn\nBarang: Sutil Bsr\nPeriksa: 200`,
+      text: `FORM QC\nVendor: CV Kayu Custom\nBarang: Talenan Custom 40cm\nPeriksa: 200`,
       messageId: "m10"
-    }, ctx.deps);
-    assert.equal(ctx.gasCalls.length, 0);
-    assert.match(ctx.sentMessages[0].content.text, /#OK A1B2C3/);
-
-    // 2. Konfirmasi #OK A1B2C3 -> kirim ke GAS
-    await handleIncomingTextMessage({
-      chatJid: "1203630001@g.us",
-      participant: "62812@s.whatsapp.net",
-      senderName: "Budi (+62812)",
-      text: "#OK A1B2C3",
-      messageId: "m11"
     }, ctx.deps);
     assert.equal(ctx.gasCalls.length, 1);
     assert.equal(ctx.gasCalls[0].action, "LOG_QC_REPORT");
-    assert.equal(ctx.gasCalls[0].data.vendor, "Widodo Klaten");
-    assert.equal(ctx.gasCalls[0].data.items[0].kodeRawBody, "RB102003");
-    assert.match(ctx.sentMessages[1].content.text, /spreadsheets\/d\/sheet123/);
+    assert.equal(ctx.gasCalls[0].data.vendor, "CV Kayu Custom");
+    assert.equal(ctx.gasCalls[0].data.items[0].kodeRawBody, "");
+    assert.equal(ctx.gasCalls[0].data.items[0].namaItem, "Talenan Custom 40cm");
+    assert.match(ctx.sentMessages[0].content.text, /spreadsheets\/d\/sheet123/);
 
-    // 3. Simulasi error jaringan -> masuk MessageQueue, lalu retry berhasil
+    // 2. Simulasi error jaringan -> masuk MessageQueue, lalu retry berhasil
     let failMode = true;
     const netDeps = {
       ...ctx.deps,
@@ -149,13 +139,13 @@ test("router WhatsApp menangani konfirmasi #OK dan fallback offline queue saat G
     }, netDeps);
 
     assert.equal(ctx.queue.getPendingMessages().length, 1);
-    assert.match(ctx.sentMessages[2].content.text, /antrean offline/i);
+    assert.match(ctx.sentMessages[1].content.text, /antrean offline/i);
 
     failMode = false;
     const retried = await processQueuedMessages(netDeps);
     assert.equal(retried.processed, 1);
     assert.equal(ctx.queue.getPendingMessages().length, 0);
-    assert.match(ctx.sentMessages[3].content.text, /recovered123/);
+    assert.match(ctx.sentMessages[2].content.text, /recovered123/);
   } finally {
     rmSync(ctx.dir, { recursive: true, force: true });
   }

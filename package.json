@@ -1,10 +1,10 @@
 {
-  "name": "wa-qc-sync",
-  "version": "1.0.0",
+  "name": "qc-kwas",
+  "version": "1.0.1",
   "description": "WhatsApp & Web Field Quality Control automation to Google Drive & Sheets for CV Karya Wahana Sentosa",
   "main": "src/runtime/index.js",
   "bin": {
-    "wa-qc-sync": "src/runtime/cli.js"
+    "qc-kwas": "src/runtime/cli.js"
   },
   "type": "module",
   "files": [

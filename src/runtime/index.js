@@ -161,6 +161,14 @@ export async function handleIncomingTextMessage(
   }
 
   if (parsed.command === "LIST_PRODUCTS") {
+    if (PRODUCT_MASTER.length === 0) {
+      await sock.sendMessage(
+        chatJid,
+        { text: "ℹ️ Mode input bebas aktif (tidak memakai database produk). Ketik langsung nama produk di template *FORM QC*." },
+        replyOpts
+      );
+      return { handled: true, command: "LIST_PRODUCTS" };
+    }
     const listStr = PRODUCT_MASTER.map((p, idx) => `${idx + 1}. ${p.nama} (SKU: ${p.sku})`).join("\n");
     await sock.sendMessage(
       chatJid,
@@ -171,6 +179,14 @@ export async function handleIncomingTextMessage(
   }
 
   if (parsed.command === "VENDOR") {
+    if (VENDORS_PRE.length === 0 && VENDORS_FIN.length === 0) {
+      await sock.sendMessage(
+        chatJid,
+        { text: "ℹ️ Mode input bebas aktif (tidak memakai database vendor). Ketik langsung nama vendor di template *FORM QC*." },
+        replyOpts
+      );
+      return { handled: true, command: "VENDOR" };
+    }
     const sub = String(parsed.sub || "").toUpperCase();
     const listPre = VENDORS_PRE.map((v, i) => `${i + 1}. ${v}`).join("\n");
     const listFin = VENDORS_FIN.map((v, i) => `${i + 1}. ${v}`).join("\n");

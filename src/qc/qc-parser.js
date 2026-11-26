@@ -183,7 +183,7 @@ export function parseQcMessage(text) {
       rusak: [],
       kriteriaStatus: {}
     };
-    let hasItemFields = false;
+    let hasFilledContent = false;
 
     for (const rawLine of blockLines) {
       const line = rawLine.trim();
@@ -210,15 +210,12 @@ export function parseQcMessage(text) {
 
       if (ITEM_KEY_MAP.has(normKey)) {
         const targetField = ITEM_KEY_MAP.get(normKey);
-        hasItemFields = true;
+        if (!rawVal) continue;
+        if (targetField !== "tahap") {
+          hasFilledContent = true;
+        }
 
         if (targetField === "periksa" || targetField === "lolos") {
-          if (!rawVal) {
-            if (targetField === "periksa") {
-              return { error: `Baris "${rawKey}" pada Item #${bIdx + 1} wajib diisi angka bulat > 0.` };
-            }
-            continue;
-          }
           const num = parseIntegerQty(rawVal);
           if (Number.isNaN(num) || num === null) {
             return { error: `Nilai "${rawKey}: ${rawVal}" pada Item #${bIdx + 1} harus berupa bilangan bulat.` };
@@ -245,10 +242,10 @@ export function parseQcMessage(text) {
 
       // Cek Lainnya
       if (normKey === "lainnya" || normKey === "other") {
-        hasItemFields = true;
         const parsedOther = parseLainnyaValue(rawVal);
         if (parsedOther?.error) return { error: parsedOther.error };
         if (parsedOther) {
+          hasFilledContent = true;
           itemRaw.rusak.push({
             kriteriaId: "LAINNYA",
             label: parsedOther.label,
@@ -261,7 +258,7 @@ export function parseQcMessage(text) {
       // Cek 14 kriteria standar
       const matchedCrit = matchCriterion(rawKey);
       if (!matchedCrit.isOther) {
-        hasItemFields = true;
+        if (rawVal) hasFilledContent = true;
         if (isNaToken(rawVal)) {
           itemRaw.kriteriaStatus[matchedCrit.id] = "NA";
         } else if (isOkToken(rawVal)) {
@@ -293,10 +290,7 @@ export function parseQcMessage(text) {
       };
     }
 
-    if (!hasItemFields && !itemRaw.barangInput) {
-      if (blocks.length > 1) {
-        return { error: `Blok Item #${bIdx + 1} setelah pemisah '---' kosong.` };
-      }
+    if (!hasFilledContent && !itemRaw.barangInput) {
       continue;
     }
 
@@ -307,56 +301,34 @@ export function parseQcMessage(text) {
       return { error: `Field "Periksa" (jumlah diperiksa) pada Item #${bIdx + 1} wajib diisi.` };
     }
 
-    // Match produk
+    // Bebas custom produk: gunakan SKU resmi hanya bila cocok persis (score === 1), selebihnya pakai teks asli user
     const productMatch = matchProduct(itemRaw.barangInput);
-    if (!productMatch) {
-      return {
-        error: `Produk "${itemRaw.barangInput}" pada Item #${bIdx + 1} tidak ditemukan (skor < 0.50). Ketik *#PRODUK* untuk daftar 66 SKU resmi.`
-      };
+    if (productMatch && productMatch.score === 1) {
+      itemRaw.kodeRawBody = productMatch.product.sku;
+      itemRaw.namaItem = productMatch.product.nama;
+    } else {
+      itemRaw.kodeRawBody = "";
+      itemRaw.namaItem = itemRaw.barangInput.trim();
     }
-
-    if (productMatch.corrected) hasCorrection = true;
-    if (productMatch.requiresConfirmation) {
-      corrections.push({
-        field: blocks.length > 1 ? `Barang (Item #${bIdx + 1})` : "Barang",
-        original: itemRaw.barangInput,
-        suggested: `${productMatch.product.nama} (${productMatch.product.sku})`,
-        score: productMatch.score
-      });
-    }
-
-    itemRaw.kodeRawBody = productMatch.product.sku;
-    itemRaw.namaItem = productMatch.product.nama;
     parsedItems.push(itemRaw);
   }
 
   if (!headerData.vendor) {
-    return { error: `Field "Vendor" wajib diisi. Ketik *#VENDOR* untuk melihat daftar vendor.` };
+    return { error: `Field "Vendor" wajib diisi.` };
   }
   if (parsedItems.length === 0) {
     return { error: `Data barang ("Barang" dan "Periksa") belum diisi. Ketik *qc* untuk menyalin template.` };
   }
 
-  // Match vendor (auto PRE/FIN, atau utamakan PRE/FIN berdasarkan item pertama bila konsisten)
+  // Bebas custom vendor: normalkan huruf besar/kecil bila cocok persis (score === 1), selebihnya pakai teks asli user
   const vendorMatch = matchVendorWithConfidence(headerData.vendor);
-  if (!vendorMatch) {
-    return {
-      error: `Vendor "${headerData.vendor}" tidak ditemukan (skor < 0.50). Ketik *#VENDOR* untuk daftar vendor rekanan.`
-    };
-  }
-  if (vendorMatch.corrected) hasCorrection = true;
-  if (vendorMatch.requiresConfirmation) {
-    corrections.push({
-      field: "Vendor",
-      original: headerData.vendor,
-      suggested: vendorMatch.vendor,
-      score: vendorMatch.score
-    });
-  }
+  const resolvedVendor = vendorMatch && vendorMatch.score === 1
+    ? vendorMatch.vendor
+    : headerData.vendor.trim();
 
   const validation = validateQcReport({
     sumber: "WHATSAPP",
-    vendor: vendorMatch.vendor,
+    vendor: resolvedVendor,
     noDokumenPo: headerData.noDokumenPo,
     tanggalPemeriksaan: headerData.tanggalPemeriksaan,
     petugasQc: headerData.petugasQc,
