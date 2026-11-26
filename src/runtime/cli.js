@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // src/runtime/cli.js — CLI global wa-qc-sync (start, web, setup, doctor)
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import fs from "fs";
 import net from "net";
 import path from "path";
@@ -362,6 +362,54 @@ function openBrowserUrl(url) {
   } catch {}
 }
 
+function trySpawnSystemdUser(childArgs, dataDir, activePort, logPath) {
+  if (process.platform !== "linux") return null;
+  try {
+    const active = spawnSync("systemctl", ["--user", "is-active", "default.target"], {
+      stdio: "ignore",
+      timeout: 2000
+    });
+    if (active.status !== 0) return null;
+
+    const unitName = `qc-kwas-${process.pid}-${Date.now()}`;
+    const envVars = {
+      WA_QC_HOME: dataDir,
+      PORT: String(activePort),
+      PATH: process.env.PATH
+    };
+    const setenvArgs = Object.entries(envVars)
+      .filter(([, val]) => val !== undefined && val !== "")
+      .map(([key, val]) => `--setenv=${key}=${val}`);
+
+    const runRes = spawnSync(
+      "systemd-run",
+      [
+        "--user",
+        "--quiet",
+        "--collect",
+        `--unit=${unitName}`,
+        `--working-directory=${process.cwd()}`,
+        `--property=StandardOutput=append:${logPath}`,
+        `--property=StandardError=append:${logPath}`,
+        ...setenvArgs,
+        process.execPath,
+        ...childArgs
+      ],
+      { stdio: "ignore", timeout: 5000 }
+    );
+    if (runRes.status !== 0) return null;
+
+    const pidRes = spawnSync("systemctl", ["--user", "show", "-p", "MainPID", "--value", unitName], {
+      encoding: "utf8",
+      timeout: 3000
+    });
+    const pid = Number((pidRes.stdout || "").trim());
+    return Number.isInteger(pid) && pid > 0 ? pid : null;
+  } catch {
+    return null;
+  }
+}
+
 async function startBackgroundDaemon(dataDir, opts, activePort) {
   const existing = readRunningDaemon(dataDir);
   if (existing) {
@@ -372,7 +420,6 @@ async function startBackgroundDaemon(dataDir, opts, activePort) {
 
   const logPath = getLogPath(dataDir);
   const pidPath = getPidPath(dataDir);
-  const logFd = fs.openSync(logPath, "a");
   const childArgs = [
     fileURLToPath(import.meta.url),
     opts.webOnly ? "web" : "run",
@@ -381,17 +428,22 @@ async function startBackgroundDaemon(dataDir, opts, activePort) {
     "--port", String(activePort)
   ];
 
-  const child = spawn(process.execPath, childArgs, {
-    detached: true,
-    windowsHide: true,
-    stdio: ["ignore", logFd, logFd],
-    env: { ...process.env, WA_QC_HOME: dataDir, PORT: String(activePort) }
-  });
-  child.unref();
-  fs.closeSync(logFd);
+  let childPid = trySpawnSystemdUser(childArgs, dataDir, activePort, logPath);
+  if (!childPid) {
+    const logFd = fs.openSync(logPath, "a");
+    const child = spawn(process.execPath, childArgs, {
+      detached: true,
+      windowsHide: true,
+      stdio: ["ignore", logFd, logFd],
+      env: { ...process.env, WA_QC_HOME: dataDir, PORT: String(activePort) }
+    });
+    childPid = child.pid;
+    child.unref();
+    fs.closeSync(logFd);
+  }
 
   fs.writeFileSync(pidPath, JSON.stringify({
-    pid: child.pid,
+    pid: childPid,
     port: activePort,
     mode: opts.webOnly ? "web" : "start",
     startedAt: new Date().toISOString()
@@ -400,7 +452,7 @@ async function startBackgroundDaemon(dataDir, opts, activePort) {
   // Tunggu hingga port HTTP siap atau proses gagal
   let listening = false;
   for (let i = 0; i < 40; i++) {
-    if (!isPidAlive(child.pid)) break;
+    if (!isPidAlive(childPid)) break;
     const p = await checkPortAvailable(activePort);
     if (!p.ok) {
       listening = true;
@@ -409,7 +461,7 @@ async function startBackgroundDaemon(dataDir, opts, activePort) {
     await new Promise((r) => setTimeout(r, 150));
   }
 
-  if (!isPidAlive(child.pid) && !listening) {
+  if (!isPidAlive(childPid) && !listening) {
     try { fs.unlinkSync(pidPath); } catch {}
     console.error("[CLI ERROR] Gagal menjalankan qc-kwas di latar belakang. Log terakhir:");
     try {
@@ -420,7 +472,7 @@ async function startBackgroundDaemon(dataDir, opts, activePort) {
   }
 
   const webUrl = `http://localhost:${activePort}`;
-  console.log(`qc-kwas berjalan di latar belakang (PID: ${child.pid})`);
+  console.log(`qc-kwas berjalan di latar belakang (PID: ${childPid})`);
   console.log(`- Web Command Center : ${webUrl}`);
   console.log(`- Direktori data     : ${dataDir}`);
   console.log(`- Perintah lain      : qc-kwas status | qc-kwas logs | qc-kwas stop`);
