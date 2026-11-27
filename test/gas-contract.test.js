@@ -72,10 +72,16 @@ function createMockGasEnv({ apiSecret = "", generatePdf = "true" } = {}) {
       return this;
     }
     setFontWeight() { return this; }
+    setFontColor() { return this; }
+    setFontSize() { return this; }
     setBackground() { return this; }
     setWrap() { return this; }
     setVerticalAlignment() { return this; }
     setHorizontalAlignment() { return this; }
+    setNumberFormat() { return this; }
+    setBorder() { return this; }
+    merge() { return this; }
+    setFormula(f) { return this.setValue(f); }
   }
 
   class MockSheet {
@@ -83,8 +89,31 @@ function createMockGasEnv({ apiSecret = "", generatePdf = "true" } = {}) {
       this.name = name;
       this.rows = [];
       this._checkboxes = new Set();
+      this._charts = [];
       this.frozenRows = 0;
     }
+    getCharts() { return [...this._charts]; }
+    removeChart(chart) {
+      this._charts = this._charts.filter((c) => c !== chart);
+    }
+    insertChart(chart) {
+      this._charts.push(chart);
+      return chart;
+    }
+    newChart() {
+      const cfg = { chartType: null, ranges: [], options: {}, position: null, numHeaders: 0 };
+      const builder = {
+        setChartType: (t) => { cfg.chartType = t; return builder; },
+        addRange: (r) => { cfg.ranges.push(r); return builder; },
+        setNumHeaders: (n) => { cfg.numHeaders = n; return builder; },
+        setOption: (k, v) => { cfg.options[k] = v; return builder; },
+        setPosition: (r, c, ox, oy) => { cfg.position = { r, c, ox, oy }; return builder; },
+        build: () => cfg
+      };
+      return builder;
+    }
+    setHiddenGridlines() { return this; }
+    setRowHeight() { return this; }
     _colToNum(colStr) {
       let n = 0;
       for (const ch of colStr.toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64);
@@ -132,6 +161,10 @@ function createMockGasEnv({ apiSecret = "", generatePdf = "true" } = {}) {
       this.rows.splice(afterRow, 0, []);
       return this;
     }
+    deleteRows(startRow, numRows) {
+      this.rows.splice(startRow - 1, numRows);
+      return this;
+    }
     copyTo(targetSs) {
       const copy = new MockSheet(this.name + " (copy)");
       copy.rows = this.rows.map((r) => [...r]);
@@ -168,24 +201,31 @@ function createMockGasEnv({ apiSecret = "", generatePdf = "true" } = {}) {
   let pdfCounter = 0;
   let lockCount = 0;
 
-  const makeDriveFile = (id, name, url, mimeType = "application/vnd.google-apps.spreadsheet") => ({
+  const makeDriveFile = (id, name, url, mimeType = "application/vnd.google-apps.spreadsheet", folderId = null) => ({
     id,
     name,
     url,
     mimeType,
+    folderId,
+    trashed: false,
     movedTo: null,
     getId: () => id,
     getName: () => name,
     getMimeType: () => mimeType,
+    isTrashed: () => driveFiles.get(id).trashed,
+    setTrashed: (val) => {
+      driveFiles.get(id).trashed = Boolean(val);
+    },
     moveTo: (targetFolder) => {
       driveFiles.get(id).movedTo = targetFolder;
+      driveFiles.get(id).folderId = targetFolder?.getId ? targetFolder.getId() : null;
     },
     setName: (nextName) => {
       name = nextName;
       driveFiles.get(id).name = nextName;
     },
     getUrl: () => url,
-    makeCopy: (copyName) => {
+    makeCopy: (copyName, targetFolder) => {
       copyCounter++;
       const newId = `copy-${copyCounter}`;
       const newUrl = `https://docs.google.com/spreadsheets/d/${newId}`;
@@ -198,7 +238,8 @@ function createMockGasEnv({ apiSecret = "", generatePdf = "true" } = {}) {
         return ns;
       });
       spreadsheets.set(newId, cloned);
-      const f = makeDriveFile(newId, copyName, newUrl);
+      const targetFolderId = targetFolder?.getId ? targetFolder.getId() : null;
+      const f = makeDriveFile(newId, copyName, newUrl, "application/vnd.google-apps.spreadsheet", targetFolderId);
       driveFiles.set(newId, f);
       return f;
     }
@@ -206,15 +247,46 @@ function createMockGasEnv({ apiSecret = "", generatePdf = "true" } = {}) {
 
   driveFiles.set("tpl-sheet-1", makeDriveFile("tpl-sheet-1", "Template Form QC", "https://docs.google.com/spreadsheets/d/tpl-sheet-1"));
 
-  const folder = {
-    createFile: (blob) => {
-      pdfCounter++;
-      const pid = `pdf-${pdfCounter}`;
-      const f = makeDriveFile(pid, blob.name, `https://drive.google.com/file/d/${pid}/view`);
-      driveFiles.set(pid, f);
-      return f;
-    }
+  const makeMockFolder = (folderId, folderName) => {
+    const subFolders = [];
+    const folderObj = {
+      id: folderId,
+      name: folderName,
+      getId: () => folderId,
+      getName: () => folderName,
+      getFoldersByName: (name) => {
+        const matches = subFolders.filter((sf) => sf.name === name);
+        let idx = 0;
+        return {
+          hasNext: () => idx < matches.length,
+          next: () => matches[idx++]
+        };
+      },
+      createFolder: (name) => {
+        const sub = makeMockFolder(`${folderId}/sub-${subFolders.length + 1}`, name);
+        subFolders.push(sub);
+        return sub;
+      },
+      getFiles: () => {
+        const matches = Array.from(driveFiles.values()).filter((f) => f.folderId === folderId);
+        let idx = 0;
+        return {
+          hasNext: () => idx < matches.length,
+          next: () => matches[idx++]
+        };
+      },
+      createFile: (blob) => {
+        pdfCounter++;
+        const pid = `pdf-${pdfCounter}`;
+        const f = makeDriveFile(pid, blob.name, `https://drive.google.com/file/d/${pid}/view`, "application/pdf", folderId);
+        driveFiles.set(pid, f);
+        return f;
+      }
+    };
+    return folderObj;
   };
+
+  const folder = makeMockFolder("out-folder-1", "arsip");
 
   const sandbox = {
     JSON,
@@ -231,6 +303,13 @@ function createMockGasEnv({ apiSecret = "", generatePdf = "true" } = {}) {
     parseFloat,
     isNaN,
     Logger: { log: () => {} },
+    Charts: {
+      ChartType: {
+        COLUMN: "COLUMN",
+        BAR: "BAR",
+        PIE: "PIE"
+      }
+    },
     PropertiesService: {
       getScriptProperties: () => ({
         getProperty: (k) => props[k] || null,
@@ -797,8 +876,12 @@ test("gas/Code_QC.gs membuat dan menyinkronkan sheet DASHBOARD, ROWBODY, dan FIN
   assert.equal(dashSheet.rows[1][2], 150); // Total Diperiksa 100 + 50
   assert.equal(dashSheet.rows[1][3], 24); // Total Rusak 20 + 4
   assert.equal(dashSheet.rows[1][19], 4); // Kehalusan (col 6 + index 13)
+  assert.equal(dashSheet.getCharts().length, 0);
+  const grafikSheet = rekapSs.getSheetByName("GRAFIK_QC");
+  assert.ok(grafikSheet);
+  assert.equal(grafikSheet.getCharts().length, 3);
 
-  // VOID laporan -> DASHBOARD otomatis mengosongkan vendor yang seluruh laporannya di-VOID
+  // VOID laporan -> DASHBOARD tetap menampilkan semua vendor master dengan angka kunjungan 0
   const voidRes = JSON.parse(env.sandbox.doPost({
     postData: {
       contents: JSON.stringify({
@@ -808,5 +891,56 @@ test("gas/Code_QC.gs membuat dan menyinkronkan sheet DASHBOARD, ROWBODY, dan FIN
     }
   }).getContent());
   assert.equal(voidRes.status, "success");
-  assert.equal(dashSheet.rows[1][0], "");
+  assert.equal(dashSheet.rows.filter((r) => r[0]).length, 22); // 1 header + 21 vendor unik dari VENDOR_MASTER
+  assert.equal(dashSheet.rows[1][1], 0);
+  assert.equal(dashSheet.rows[1][2], 0);
+  assert.equal(dashSheet.getCharts().length, 0);
+  assert.equal(grafikSheet.getCharts().length, 3);
+
+  // File laporan harus tersimpan di subfolder "Laporan QC", bukan langsung di folder arsip
+  assert.equal(env.driveFiles.get("copy-1").folderId, "out-folder-1/sub-1");
+
+  // RESET_QC_DATA tanpa konfirmasi ditolak, dengan confirm="RESET" membersihkan semua sheet & file Drive
+  const badReset = JSON.parse(env.sandbox.doPost({
+    postData: { contents: JSON.stringify({ action: "RESET_QC_DATA", data: { confirm: "NO" } }) }
+  }).getContent());
+  assert.equal(badReset.status, "error");
+  assert.equal(badReset.code, "VALIDATION_ERROR");
+
+  const resetRes = JSON.parse(env.sandbox.doPost({
+    postData: { contents: JSON.stringify({ action: "RESET_QC_DATA", data: { confirm: "RESET" } }) }
+  }).getContent());
+  assert.equal(resetRes.status, "success");
+  assert.equal(resetRes.clearedSheets, 7);
+  assert.equal(resetRes.trashedFiles, 1);
+  assert.equal(env.driveFiles.get("copy-1").trashed, true);
+  assert.equal(rekapSs.getSheetByName("REKAP_QC_KUNJUNGAN").rows.length, 1);
+  assert.equal(rekapSs.getSheetByName("ROWBODY").rows.length, 1);
+  assert.equal(rekapSs.getSheetByName("FINISHING").rows.length, 1);
+  assert.equal(rekapSs.getSheetByName("REKAP_QC_DETAIL_ITEM").rows.length, 1);
+  assert.equal(rekapSs.getSheetByName("LOG_KERUSAKAN").rows.length, 1);
+  assert.equal(rekapSs.getSheetByName("_LOG_META").rows.length, 1);
+  assert.equal(rekapSs.getSheetByName("DASHBOARD").rows.filter((r) => r[0]).length, 22);
+  assert.equal(rekapSs.getSheetByName("DASHBOARD").rows[1][1], 0);
+  assert.equal(env.driveFiles.get("tpl-sheet-1").trashed, false);
+
+  // ADD_MASTER_PRODUCT & ADD_MASTER_VENDOR menulis ke DB_Master & VENDOR_MASTER dan terbaca di GET_MASTER_DATA
+  const addProdRes = JSON.parse(env.sandbox.doPost({
+    postData: { contents: JSON.stringify({ action: "ADD_MASTER_PRODUCT", data: { namaProduk: "Talang Jati", kategori: "Kitchenware" } }) }
+  }).getContent());
+  assert.equal(addProdRes.status, "success");
+  assert.equal(addProdRes.product.namaProduk, "Talang Jati");
+
+  const addVenRes = JSON.parse(env.sandbox.doPost({
+    postData: { contents: JSON.stringify({ action: "ADD_MASTER_VENDOR", data: { namaVendor: "CV Jati Makmur", tipeVendor: "Pre-Finishing" } }) }
+  }).getContent());
+  assert.equal(addVenRes.status, "success");
+  assert.equal(addVenRes.vendor.namaVendor, "CV Jati Makmur");
+
+  const masterRes = JSON.parse(env.sandbox.doPost({
+    postData: { contents: JSON.stringify({ action: "GET_MASTER_DATA", data: {} }) }
+  }).getContent());
+  assert.equal(masterRes.status, "success");
+  assert.equal(masterRes.data.products.length, 67);
+  assert.equal(masterRes.data.vendors.length, 23);
 });

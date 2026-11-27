@@ -5,6 +5,7 @@
  */
 
 var SHEET_NAMES = {
+  GRAFIK: "GRAFIK_QC",
   KUNJUNGAN: "REKAP_QC_KUNJUNGAN",
   DETAIL: "REKAP_QC_DETAIL_ITEM",
   KERUSAKAN: "LOG_KERUSAKAN",
@@ -55,6 +56,22 @@ var DEFECT_REKAP_COLUMNS = [
 ];
 
 var TEMPLATE_SHEET_NAME = "Form QC Lap";
+var REPORT_SUBFOLDER_NAME = "Laporan QC";
+
+function getReportOutputFolder(cfg) {
+  var rootFolder = DriveApp.getFolderById(cfg.outputFolderId);
+  if (
+    typeof rootFolder.getFoldersByName === "function" &&
+    typeof rootFolder.createFolder === "function"
+  ) {
+    var iter = rootFolder.getFoldersByName(REPORT_SUBFOLDER_NAME);
+    if (iter && typeof iter.hasNext === "function" && iter.hasNext()) {
+      return iter.next();
+    }
+    return rootFolder.createFolder(REPORT_SUBFOLDER_NAME);
+  }
+  return rootFolder;
+}
 
 var CRITERIA_ROW_MAP = [
   { id: "ATI", row: 14, label: "Bebas Ati" },
@@ -172,8 +189,14 @@ function doPost(e) {
       return handleGetQcDashboard(data, cfg);
     } else if (action === "VOID_QC_REPORT") {
       return handleVoidQcReport(data, cfg);
+    } else if (action === "RESET_QC_DATA") {
+      return handleResetQcData(data, cfg);
     } else if (action === "GET_MASTER_DATA") {
       return handleGetMasterData(cfg);
+    } else if (action === "ADD_MASTER_PRODUCT") {
+      return handleAddMasterProduct(data, cfg);
+    } else if (action === "ADD_MASTER_VENDOR") {
+      return handleAddMasterVendor(data, cfg);
     }
 
     return jsonResponse({ status: "error", message: "Action tidak dikenali: " + action });
@@ -288,6 +311,10 @@ function ensureRekapSheets(ss) {
       sheet.hideSheet();
     }
   }
+
+  if (!ss.getSheetByName(SHEET_NAMES.GRAFIK)) {
+    ss.insertSheet(SHEET_NAMES.GRAFIK);
+  }
 }
 
 function buildStageLogRow(data, item, noLaporan, columns) {
@@ -339,11 +366,183 @@ function appendStageLogs(rekapSs, data, item, noLaporan) {
   }
 }
 
+function styleKpiCard(sheet, startCol, title, formula, accentColor, numFormat) {
+  var titleRange = sheet.getRange(4, startCol, 1, 2);
+  if (typeof titleRange.merge === "function") titleRange.merge();
+  titleRange.setValue(title);
+  if (typeof titleRange.setFontSize === "function") titleRange.setFontSize(9);
+  titleRange.setFontWeight("bold");
+  if (typeof titleRange.setFontColor === "function") titleRange.setFontColor("#475569");
+  titleRange.setBackground("#f8fafc");
+  titleRange.setHorizontalAlignment("center");
+  if (typeof titleRange.setBorder === "function") titleRange.setBorder(true, true, false, true, false, false, "#cbd5e1", null);
+
+  var valRange = sheet.getRange(5, startCol, 1, 2);
+  if (typeof valRange.merge === "function") valRange.merge();
+  if (typeof valRange.setFormula === "function") valRange.setFormula(formula);
+  else valRange.setValue(formula);
+  if (typeof valRange.setFontSize === "function") valRange.setFontSize(18);
+  valRange.setFontWeight("bold");
+  if (typeof valRange.setFontColor === "function") valRange.setFontColor(accentColor || "#0f172a");
+  valRange.setBackground("#ffffff");
+  valRange.setHorizontalAlignment("center");
+  valRange.setVerticalAlignment("middle");
+  if (numFormat && typeof valRange.setNumberFormat === "function") valRange.setNumberFormat(numFormat);
+  if (typeof valRange.setBorder === "function") valRange.setBorder(false, true, true, true, false, false, "#cbd5e1", null);
+}
+
+function colIndexToLetter(colIdx) {
+  var letter = "";
+  var n = colIdx;
+  while (n > 0) {
+    var rem = (n - 1) % 26;
+    letter = String.fromCharCode(65 + rem) + letter;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letter;
+}
+
+function buildGrafikSheetLayout(grafikSheet, vendorCount) {
+  if (!grafikSheet) return;
+  if (typeof grafikSheet.setHiddenGridlines === "function") {
+    grafikSheet.setHiddenGridlines(true);
+  }
+
+  var banner = grafikSheet.getRange(1, 2, 1, 13);
+  if (typeof banner.merge === "function") banner.merge();
+  banner.setValue("GRAFIK & PERFORMA QUALITY CONTROL — CV KARYA WAHANA SENTOSA");
+  banner.setBackground("#0f172a");
+  if (typeof banner.setFontColor === "function") banner.setFontColor("#ffffff");
+  if (typeof banner.setFontSize === "function") banner.setFontSize(14);
+  banner.setFontWeight("bold");
+  banner.setVerticalAlignment("middle");
+  banner.setHorizontalAlignment("left");
+
+  var subBanner = grafikSheet.getRange(2, 2, 1, 13);
+  if (typeof subBanner.merge === "function") subBanner.merge();
+  subBanner.setValue("Ringkasan otomatis performa vendor & distribusi kerusakan berdasarkan data DASHBOARD (DOK. QC-WOOD-01)");
+  subBanner.setBackground("#1e293b");
+  if (typeof subBanner.setFontColor === "function") subBanner.setFontColor("#cbd5e1");
+  if (typeof subBanner.setFontSize === "function") subBanner.setFontSize(9.5);
+  subBanner.setVerticalAlignment("middle");
+
+  if (typeof grafikSheet.setRowHeight === "function") {
+    grafikSheet.setRowHeight(1, 34);
+    grafikSheet.setRowHeight(2, 22);
+    grafikSheet.setRowHeight(4, 22);
+    grafikSheet.setRowHeight(5, 36);
+  }
+
+  var lastDashRow = Math.max(2, vendorCount + 1);
+  styleKpiCard(grafikSheet, 2, "TOTAL KUNJUNGAN", "=SUM(" + SHEET_NAMES.DASHBOARD + "!B2:B" + lastDashRow + ")", "#0f172a", "#,##0");
+  styleKpiCard(grafikSheet, 5, "TOTAL DIPERIKSA (PCS)", "=SUM(" + SHEET_NAMES.DASHBOARD + "!C2:C" + lastDashRow + ")", "#0284c7", "#,##0");
+  styleKpiCard(grafikSheet, 8, "TOTAL RUSAK (PCS)", "=SUM(" + SHEET_NAMES.DASHBOARD + "!D2:D" + lastDashRow + ")", "#e11d48", "#,##0");
+  styleKpiCard(
+    grafikSheet,
+    11,
+    "PASS RATE RATA-RATA",
+    "=IF(SUM(" + SHEET_NAMES.DASHBOARD + "!C2:C" + lastDashRow + ")>0, SUM(" + SHEET_NAMES.DASHBOARD + "!E2:E" + lastDashRow + ")/SUM(" + SHEET_NAMES.DASHBOARD + "!C2:C" + lastDashRow + "), 0)",
+    "#059669",
+    "0.0%"
+  );
+
+  // Tabel ringkas jenis kerusakan di bawah area grafik (B48:C64) untuk sumber Grafik Pareto Kerusakan
+  var defectHeader = grafikSheet.getRange(48, 2, 1, 2);
+  defectHeader.setValues([["Jenis Kerusakan", "Total Rusak (pcs)"]]);
+  defectHeader.setFontWeight("bold");
+  defectHeader.setBackground("#f1f5f9");
+  for (var i = 0; i < DEFECT_REKAP_COLUMNS.length; i++) {
+    var r = 49 + i;
+    var dashCol = colIndexToLetter(7 + i);
+    grafikSheet.getRange(r, 2).setValue(DEFECT_REKAP_COLUMNS[i].label);
+    var cell = grafikSheet.getRange(r, 3);
+    var formula = "=SUM(" + SHEET_NAMES.DASHBOARD + "!" + dashCol + "2:" + dashCol + lastDashRow + ")";
+    if (typeof cell.setFormula === "function") cell.setFormula(formula);
+    else cell.setValue(formula);
+  }
+}
+
+function clearSheetCharts(sheet) {
+  if (!sheet) return;
+  if (typeof sheet.getCharts === "function" && typeof sheet.removeChart === "function") {
+    var existing = sheet.getCharts() || [];
+    for (var i = 0; i < existing.length; i++) {
+      sheet.removeChart(existing[i]);
+    }
+  }
+}
+
+function syncDashboardCharts(rekapSs, dashSheet, vendorCount) {
+  clearSheetCharts(dashSheet);
+  if (!rekapSs) return;
+
+  var grafikSheet = rekapSs.getSheetByName(SHEET_NAMES.GRAFIK);
+  if (!grafikSheet) {
+    grafikSheet = rekapSs.insertSheet(SHEET_NAMES.GRAFIK);
+  }
+  clearSheetCharts(grafikSheet);
+  buildGrafikSheetLayout(grafikSheet, vendorCount);
+
+  if (vendorCount <= 0) return;
+  if (typeof grafikSheet.newChart !== "function" || typeof grafikSheet.insertChart !== "function") return;
+  if (typeof Charts === "undefined" || !Charts.ChartType) return;
+
+  var lastRow = vendorCount + 1;
+
+  var volumeBuilder = grafikSheet.newChart()
+    .setChartType(Charts.ChartType.COLUMN)
+    .addRange(dashSheet.getRange(1, 1, lastRow, 1))
+    .addRange(dashSheet.getRange(1, 4, lastRow, 2))
+    .setOption("title", "Performa QC per Vendor (Rusak vs Lolos)")
+    .setOption("isStacked", true)
+    .setOption("colors", ["#e11d48", "#059669"])
+    .setOption("legend", { position: "top" })
+    .setOption("hAxis", { slantedText: true, slantedTextAngle: 35 })
+    .setOption("vAxis", { minValue: 0, title: "Jumlah (pcs)" })
+    .setOption("backgroundColor", "#ffffff")
+    .setOption("width", 610)
+    .setOption("height", 370)
+    .setPosition(7, 2, 0, 0);
+  if (typeof volumeBuilder.setNumHeaders === "function") volumeBuilder.setNumHeaders(1);
+  grafikSheet.insertChart(volumeBuilder.build());
+
+  var passRateBuilder = grafikSheet.newChart()
+    .setChartType(Charts.ChartType.BAR)
+    .addRange(dashSheet.getRange(1, 1, lastRow, 1))
+    .addRange(dashSheet.getRange(1, 6, lastRow, 1))
+    .setOption("title", "Pass Rate (%) per Vendor")
+    .setOption("colors", ["#0284c7"])
+    .setOption("legend", { position: "none" })
+    .setOption("hAxis", { minValue: 0, maxValue: 100, title: "Pass Rate (%)" })
+    .setOption("backgroundColor", "#ffffff")
+    .setOption("width", 610)
+    .setOption("height", 370)
+    .setPosition(7, 9, 0, 0);
+  if (typeof passRateBuilder.setNumHeaders === "function") passRateBuilder.setNumHeaders(1);
+  grafikSheet.insertChart(passRateBuilder.build());
+
+  var defectBuilder = grafikSheet.newChart()
+    .setChartType(Charts.ChartType.BAR)
+    .addRange(grafikSheet.getRange(48, 2, 1 + DEFECT_REKAP_COLUMNS.length, 2))
+    .setOption("title", "Distribusi Jenis Kerusakan (Total pcs)")
+    .setOption("colors", ["#d97706"])
+    .setOption("legend", { position: "none" })
+    .setOption("hAxis", { minValue: 0, title: "Total Kerusakan (pcs)" })
+    .setOption("backgroundColor", "#ffffff")
+    .setOption("width", 1240)
+    .setOption("height", 360)
+    .setPosition(27, 2, 0, 0);
+  if (typeof defectBuilder.setNumHeaders === "function") defectBuilder.setNumHeaders(1);
+  grafikSheet.insertChart(defectBuilder.build());
+}
+
 function refreshDashboardSheet(rekapSs) {
   var dashSheet = rekapSs.getSheetByName(SHEET_NAMES.DASHBOARD);
   var kSheet = rekapSs.getSheetByName(SHEET_NAMES.KUNJUNGAN);
   var mSheet = rekapSs.getSheetByName(SHEET_NAMES.META);
   if (!dashSheet || !kSheet) return;
+
+  ensureMasterSheets(rekapSs);
 
   var voidSet = {};
   if (mSheet && mSheet.getLastRow() >= 2) {
@@ -359,6 +558,35 @@ function refreshDashboardSheet(rekapSs) {
 
   var vendorMap = {};
   var vendorOrder = [];
+
+  function ensureVendorEntry(vendorName) {
+    var cleanName = String(vendorName || "").trim();
+    if (!cleanName || cleanName === "-") return null;
+    var key = cleanName.toLowerCase();
+    if (!vendorMap[key]) {
+      var emptyDefects = [];
+      for (var c = 0; c < DEFECT_REKAP_COLUMNS.length; c++) emptyDefects.push(0);
+      vendorMap[key] = {
+        vendor: cleanName,
+        kunjungan: 0,
+        diperiksa: 0,
+        rusak: 0,
+        lolos: 0,
+        defects: emptyDefects
+      };
+      vendorOrder.push(key);
+    }
+    return vendorMap[key];
+  }
+
+  var vSheet = rekapSs.getSheetByName("VENDOR_MASTER");
+  if (vSheet && vSheet.getLastRow() >= 2) {
+    var vRows = vSheet.getDataRange().getValues();
+    for (var vi = 1; vi < vRows.length; vi++) {
+      ensureVendorEntry(vRows[vi][1]);
+    }
+  }
+
   var totalKCols = 11 + DEFECT_REKAP_COLUMNS.length;
   if (kSheet.getLastRow() >= 2) {
     var kRows = kSheet.getRange(2, 1, kSheet.getLastRow() - 1, totalKCols).getValues();
@@ -367,23 +595,8 @@ function refreshDashboardSheet(rekapSs) {
       var noLap = String(kr[1] || "").trim();
       if (!noLap || voidSet[noLap]) continue;
 
-      var vendorName = String(kr[3] || "").trim() || "-";
-      var key = vendorName.toLowerCase();
-      if (!vendorMap[key]) {
-        var emptyDefects = [];
-        for (var c = 0; c < DEFECT_REKAP_COLUMNS.length; c++) emptyDefects.push(0);
-        vendorMap[key] = {
-          vendor: vendorName,
-          kunjungan: 0,
-          diperiksa: 0,
-          rusak: 0,
-          lolos: 0,
-          defects: emptyDefects
-        };
-        vendorOrder.push(key);
-      }
-
-      var agg = vendorMap[key];
+      var agg = ensureVendorEntry(String(kr[3] || "").trim() || "-");
+      if (!agg) continue;
       agg.kunjungan += 1;
       agg.diperiksa += Number(kr[6]) || 0;
       agg.rusak += Number(kr[7]) || 0;
@@ -400,11 +613,16 @@ function refreshDashboardSheet(rekapSs) {
     dashSheet.getRange(2, 1, existingLastRow - 1, totalDashCols).clearContent();
   }
 
-  if (vendorOrder.length === 0) return;
+  if (vendorOrder.length === 0) {
+    syncDashboardCharts(rekapSs, dashSheet, 0);
+    return;
+  }
 
   vendorOrder.sort(function (a, b) {
-    var diff = vendorMap[b].rusak - vendorMap[a].rusak;
-    if (diff !== 0) return diff;
+    var diffRusak = vendorMap[b].rusak - vendorMap[a].rusak;
+    if (diffRusak !== 0) return diffRusak;
+    var diffDiperiksa = vendorMap[b].diperiksa - vendorMap[a].diperiksa;
+    if (diffDiperiksa !== 0) return diffDiperiksa;
     return vendorMap[a].vendor.localeCompare(vendorMap[b].vendor);
   });
 
@@ -413,7 +631,7 @@ function refreshDashboardSheet(rekapSs) {
     var entry = vendorMap[vendorOrder[v]];
     var passRate = entry.diperiksa > 0
       ? Math.round((entry.lolos / entry.diperiksa) * 1000) / 10
-      : 100;
+      : 0;
     var row = [
       entry.vendor,
       entry.kunjungan,
@@ -429,6 +647,7 @@ function refreshDashboardSheet(rekapSs) {
   }
 
   dashSheet.getRange(2, 1, outRows.length, totalDashCols).setValues(outRows);
+  syncDashboardCharts(rekapSs, dashSheet, outRows.length);
 }
 
 function resolveFormLayout(sheet) {
@@ -544,6 +763,7 @@ function setupQcTemplate() {
     throw new Error("Rekap Spreadsheet tidak ditemukan.");
   }
   ensureRekapSheets(rekapSs);
+  ensureMasterSheets(rekapSs);
   refreshDashboardSheet(rekapSs);
 
   var templateNormalized = false;
@@ -726,7 +946,7 @@ function handleLogQcReport(data, cfg) {
     });
   }
 
-  var outputFolder = DriveApp.getFolderById(cfg.outputFolderId);
+  var outputFolder = getReportOutputFolder(cfg);
   var templateFile = assertNativeGoogleSheetTemplate(cfg.templateFileId);
   var baseName = "QC_" + sanitizeFilePart(data.vendor) + "_" + sanitizeFilePart(data.noDokumenPo) + "_" + sanitizeFilePart(data.noLaporan);
   var copiedFile = templateFile.makeCopy(baseName, outputFolder);
@@ -956,7 +1176,7 @@ function handleAppendQcItem(data, cfg) {
 
   if (cfg.generatePdf && cfg.outputFolderId) {
     try {
-      var outputFolder = DriveApp.getFolderById(cfg.outputFolderId);
+      var outputFolder = getReportOutputFolder(cfg);
       var baseName = "QC_" + sanitizeFilePart(data.vendor) + "_" + sanitizeFilePart(data.noDokumenPo) + "_" + sanitizeFilePart(noLaporan);
       var pdfFile = exportSpreadsheetToPdf(fileId, baseName, outputFolder);
       if (pdfFile) {
@@ -1286,8 +1506,137 @@ function handleVoidQcReport(data, cfg) {
   return jsonResponse({ status: "error", code: "NOT_FOUND", message: "Laporan " + noLaporan + " tidak ditemukan." });
 }
 
+var DEFAULT_MASTER_PRODUCTS = [
+  ["RB102001", "Sutil Kayu Panjang", "Sutil & Spatula"],
+  ["RB102002", "Sutil kayu Lengkung", "Sutil & Spatula"],
+  ["RB102003", "Sutil Besar", "Sutil & Spatula"],
+  ["RB102004", "Fliper Batok", "Sutil & Spatula"],
+  ["RB102005", "Spatula Batok", "Sutil & Spatula"],
+  ["RB102006", "Spatula Garpu Duco", "Sutil & Spatula"],
+  ["RB102007", "Spatula Oval Duco", "Sutil & Spatula"],
+  ["RB102008", "Spatula Round Duco", "Sutil & Spatula"],
+  ["RB102009", "Spatula Square Duco", "Sutil & Spatula"],
+  ["RB102010", "Spatula Strainer Duco", "Sutil & Spatula"],
+  ["RB102011", "Sutil Besar Duco", "Sutil & Spatula"],
+  ["RB102012", "Sutil Lengkung Duco", "Sutil & Spatula"],
+  ["RB102013", "Sutil Panjang Duco", "Sutil & Spatula"],
+  ["RB102014", "Scrapper M", "Sutil & Spatula"],
+  ["RB102015", "Scrapper s", "Sutil & Spatula"],
+  ["RB102016", "Spatula Silikon", "Sutil & Spatula"],
+  ["RB103001", "Sendok Nasi", "Sendok & Garpu"],
+  ["RB103002", "Sendok Oval", "Sendok & Garpu"],
+  ["RB103003", "Sendok Oval Cekung", "Sendok & Garpu"],
+  ["RB103004", "Sendok Pecel", "Sendok & Garpu"],
+  ["RB103005", "Sendok Peyang", "Sendok & Garpu"],
+  ["RB103006", "Sendok Sup", "Sendok & Garpu"],
+  ["RB103007", "Sendok Takar Beras", "Sendok & Garpu"],
+  ["RB103008", "Sendok Takar Tepung", "Sendok & Garpu"],
+  ["RB103009", "Sendok Tumpeng", "Sendok & Garpu"],
+  ["RB103010", "Sloted", "Sendok & Garpu"],
+  ["RB103011", "Strainer", "Sendok & Garpu"],
+  ["RB103012", "Garpu Kayu", "Sendok & Garpu"],
+  ["RB103013", "Sendok Makan", "Sendok & Garpu"],
+  ["RB103014", "Sendok Bayi / Sendok Panjang", "Sendok & Garpu"],
+  ["RB103015", "Sendok Madu", "Sendok & Garpu"],
+  ["RB103016", "Sendok Nasi Duco", "Sendok & Garpu"],
+  ["RB103017", "Sendok Oval Duco", "Sendok & Garpu"],
+  ["RB103018", "Sendok Oval Cekung", "Sendok & Garpu"],
+  ["RB103019", "Sumpit", "Sendok & Garpu"],
+  ["RB109001", "Penumbuk set", "Alat Dapur"],
+  ["RB109002", "Rolling Pin Putar", "Alat Dapur"],
+  ["RB109003", "Pemukul Daging", "Alat Dapur"],
+  ["RB109004", "Penjapit Kayu", "Alat Dapur"],
+  ["RB109005", "Penjapit Stainless", "Alat Dapur"],
+  ["RB109006", "Penggiling Adonan", "Alat Dapur"],
+  ["RB201001", "Talenan Lubang Oval", "Talenan"],
+  ["RB201002", "Talenan Besar MR DIY", "Talenan"],
+  ["RB201003", "Talenan Gagang", "Talenan"],
+  ["RB201004", "Talenan Jepang", "Talenan"],
+  ["RB201005", "Talenan 13an", "Talenan"],
+  ["RB201006", "Talenan Lubang Bulat", "Talenan"],
+  ["RB201007", "Talenan Besar Pendopo", "Talenan"],
+  ["RB201008", "Talenan Lawas", "Talenan"],
+  ["RB201009", "Talenan Square Lubang Samping", "Talenan"],
+  ["RB201010", "Talenan Square Lubang Tengah", "Talenan"],
+  ["RB201011", "Talenan Modif 1", "Talenan"],
+  ["RB201012", "Talenan Modif 2", "Talenan"],
+  ["RB201013", "Talenan Modif 3", "Talenan"],
+  ["RB201014", "Talenan Round Lubang Samping", "Talenan"],
+  ["RB201015", "Talenan Square Tanpa Lubang", "Talenan"],
+  ["RB305001", "Piring", "Peralatan Makan"],
+  ["RB305002", "Mangkok", "Peralatan Makan"],
+  ["RB305003", "Cobek", "Peralatan Makan"],
+  ["RB306001", "Cangkir + Tutup", "Gelas & Cangkir"],
+  ["RB306002", "Gelas dia 8 tinggi 12", "Gelas & Cangkir"],
+  ["RB306003", "Gelas dia 8 tinggi 14", "Gelas & Cangkir"],
+  ["RB404001", "Nampan Pendek", "Nampan & Tray"],
+  ["RB404002", "Nampan Panjang", "Nampan & Tray"],
+  ["RB404003", "Tray Bambu 40 cm", "Nampan & Tray"],
+  ["RB404004", "Tray Bambu 45 cm", "Nampan & Tray"]
+];
+
+var DEFAULT_MASTER_VENDORS = [
+  ["VPRE01", "Londo", "Londo", "Pre-Finishing"],
+  ["VPRE02", "Titik PWJ", "Titik", "Pre-Finishing"],
+  ["VPRE03", "Widodo Klaten", "Widodo", "Pre-Finishing"],
+  ["VPRE04", "Janu", "Janu", "Pre-Finishing"],
+  ["VPRE05", "Diro", "Diro", "Pre-Finishing"],
+  ["VPRE06", "Ruminto", "Ruminto", "Pre-Finishing"],
+  ["VPRE07", "Dodo", "Dodo", "Pre-Finishing"],
+  ["VPRE08", "Bayu Wonosari", "Bayu", "Pre-Finishing"],
+  ["VPRE09", "Widodo MGL", "Widodo", "Pre-Finishing"],
+  ["VPRE10", "Lanjar", "Lanjar", "Pre-Finishing"],
+  ["VPRE11", "PKH", "Hery", "Pre-Finishing"],
+  ["VPRE12", "Inhouse", "Kofif", "Pre-Finishing"],
+  ["VPRE13", "Joko Boyolali", "Joko Byll", "Pre-Finishing"],
+  ["VFIN01", "Aris", "Aris", "Finishing"],
+  ["VFIN02", "Baryadi", "Baryadi", "Finishing"],
+  ["VFIN03", "Yuli", "Yuli", "Finishing"],
+  ["VFIN04", "Yoga", "Yoga", "Finishing"],
+  ["VFIN05", "Nyoto", "Nyoto", "Finishing"],
+  ["VFIN06", "Bayu", "Bayu", "Finishing"],
+  ["VFIN07", "Sulis", "Sulis", "Finishing"],
+  ["VFIN08", "San-San", "San - San", "Finishing"],
+  ["VFIN09", "Inhouse", "Ari", "Finishing"]
+];
+
+function ensureMasterSheets(rekapSs) {
+  var masterDefs = [
+    {
+      name: "DB_Master",
+      headers: ["Kode Raw Body", "Nama Produk", "Kategori"],
+      seed: DEFAULT_MASTER_PRODUCTS
+    },
+    {
+      name: "VENDOR_MASTER",
+      headers: ["Kode Vendor", "Nama Vendor", "Contact Person", "Tipe Vendor"],
+      seed: DEFAULT_MASTER_VENDORS
+    }
+  ];
+
+  for (var i = 0; i < masterDefs.length; i++) {
+    var def = masterDefs[i];
+    var sh = rekapSs.getSheetByName(def.name);
+    if (!sh) {
+      sh = rekapSs.insertSheet(def.name);
+    }
+    var firstCell = String(sh.getRange(1, 1).getValue() || "").trim();
+    if (!firstCell) {
+      var hr = sh.getRange(1, 1, 1, def.headers.length);
+      hr.setValues([def.headers]);
+      hr.setFontWeight("bold");
+      hr.setBackground("#f1f5f9");
+      sh.setFrozenRows(1);
+    }
+    if (sh.getLastRow() < 2 && def.seed && def.seed.length > 0) {
+      sh.getRange(2, 1, def.seed.length, def.headers.length).setValues(def.seed);
+    }
+  }
+}
+
 function handleGetMasterData(cfg) {
   var rekapSs = getRekapSpreadsheet(cfg);
+  ensureMasterSheets(rekapSs);
   var products = [];
   var vendors = [];
 
@@ -1326,4 +1675,200 @@ function handleGetMasterData(cfg) {
       vendors: vendors
     }
   });
+}
+
+function handleAddMasterProduct(data, cfg) {
+  var namaProduk = String((data && (data.namaProduk || data.nama)) || "").trim();
+  if (!namaProduk) {
+    return jsonResponse({ status: "error", code: "VALIDATION_ERROR", message: "Nama produk wajib diisi." });
+  }
+  var kategori = String((data && data.kategori) || "Kitchenware").trim() || "Kitchenware";
+  var kodeRawBody = String((data && (data.kodeRawBody || data.sku)) || "").trim().toUpperCase();
+
+  var rekapSs = getRekapSpreadsheet(cfg);
+  ensureMasterSheets(rekapSs);
+  var dbSheet = rekapSs.getSheetByName("DB_Master");
+  var rows = dbSheet.getLastRow() >= 2 ? dbSheet.getDataRange().getValues() : [];
+
+  if (!kodeRawBody) {
+    kodeRawBody = "RB-" + ("000" + rows.length).slice(-3);
+  }
+
+  for (var i = 1; i < rows.length; i++) {
+    var rowSku = String(rows[i][0] || "").trim().toUpperCase();
+    var rowNama = String(rows[i][1] || "").trim().toLowerCase();
+    if (rowSku === kodeRawBody || rowNama === namaProduk.toLowerCase()) {
+      dbSheet.getRange(i + 1, 1, 1, 3).setValues([[rowSku || kodeRawBody, namaProduk, kategori]]);
+      return jsonResponse({
+        status: "success",
+        updated: true,
+        product: { kodeRawBody: rowSku || kodeRawBody, namaProduk: namaProduk, kategori: kategori }
+      });
+    }
+  }
+
+  dbSheet.appendRow([kodeRawBody, namaProduk, kategori]);
+  return jsonResponse({
+    status: "success",
+    updated: false,
+    product: { kodeRawBody: kodeRawBody, namaProduk: namaProduk, kategori: kategori }
+  });
+}
+
+function handleAddMasterVendor(data, cfg) {
+  var namaVendor = String((data && (data.namaVendor || data.nama)) || "").trim();
+  if (!namaVendor) {
+    return jsonResponse({ status: "error", code: "VALIDATION_ERROR", message: "Nama vendor wajib diisi." });
+  }
+  var tipeRaw = String((data && (data.tipeVendor || data.tipe)) || "Pre-Finishing").trim();
+  var tipeLower = tipeRaw.toLowerCase();
+  var tipeVendor = tipeLower === "both" ? "Both" : (tipeLower.indexOf("fin") !== -1 && tipeLower.indexOf("pre") === -1 ? "Finishing" : "Pre-Finishing");
+  var contactPerson = String((data && data.contactPerson) || "-").trim() || "-";
+
+  var rekapSs = getRekapSpreadsheet(cfg);
+  ensureMasterSheets(rekapSs);
+  var vSheet = rekapSs.getSheetByName("VENDOR_MASTER");
+  var rows = vSheet.getLastRow() >= 2 ? vSheet.getDataRange().getValues() : [];
+
+  var kodeVendor = String((data && data.kodeVendor) || "").trim().toUpperCase();
+  if (!kodeVendor) {
+    var prefix = tipeVendor === "Finishing" ? "VFIN-" : "VPRE-";
+    kodeVendor = prefix + ("000" + Math.max(1, rows.length)).slice(-3);
+  }
+
+  for (var i = 1; i < rows.length; i++) {
+    var rowNama = String(rows[i][1] || "").trim().toLowerCase();
+    if (rowNama === namaVendor.toLowerCase()) {
+      var existingCode = String(rows[i][0] || kodeVendor).trim();
+      vSheet.getRange(i + 1, 1, 1, 4).setValues([[existingCode, namaVendor, contactPerson, tipeVendor]]);
+      return jsonResponse({
+        status: "success",
+        updated: true,
+        vendor: { kodeVendor: existingCode, namaVendor: namaVendor, tipeVendor: tipeVendor }
+      });
+    }
+  }
+
+  vSheet.appendRow([kodeVendor, namaVendor, contactPerson, tipeVendor]);
+  refreshDashboardSheet(rekapSs);
+  return jsonResponse({
+    status: "success",
+    updated: false,
+    vendor: { kodeVendor: kodeVendor, namaVendor: namaVendor, tipeVendor: tipeVendor }
+  });
+}
+
+function handleResetQcData(data, cfg) {
+  var confirmText = String((data && data.confirm) || "").trim().toUpperCase();
+  if (confirmText !== "RESET") {
+    return jsonResponse({
+      status: "error",
+      code: "VALIDATION_ERROR",
+      message: "Konfirmasi RESET wajib dikirim untuk menghapus seluruh data QC."
+    });
+  }
+
+  var rekapSs = getRekapSpreadsheet(cfg);
+  ensureRekapSheets(rekapSs);
+
+  var mSheet = rekapSs.getSheetByName(SHEET_NAMES.META);
+  var trashedFiles = 0;
+  var trashedIdSet = {};
+  var protectedIds = {};
+  if (cfg.templateFileId) protectedIds[cfg.templateFileId] = true;
+  if (cfg.rekapSpreadsheetId) protectedIds[cfg.rekapSpreadsheetId] = true;
+  if (typeof rekapSs.getId === "function" && rekapSs.getId()) {
+    protectedIds[rekapSs.getId()] = true;
+  }
+
+  if (mSheet && mSheet.getLastRow() >= 2) {
+    var mRows = mSheet.getRange(2, 1, mSheet.getLastRow() - 1, 8).getValues();
+    for (var i = 0; i < mRows.length; i++) {
+      var ids = [String(mRows[i][4] || "").trim(), String(mRows[i][5] || "").trim()];
+      for (var j = 0; j < ids.length; j++) {
+        var fid = ids[j];
+        if (!fid || protectedIds[fid] || trashedIdSet[fid]) continue;
+        try {
+          var f = DriveApp.getFileById(fid);
+          if (f && typeof f.setTrashed === "function") {
+            f.setTrashed(true);
+            trashedIdSet[fid] = true;
+            trashedFiles++;
+          }
+        } catch (trashErr) {
+          Logger.log("Gagal memindahkan file ke sampah (" + fid + "): " + trashErr.toString());
+        }
+      }
+    }
+  }
+
+  // Bersihkan seluruh file di subfolder khusus Laporan QC (arsip & REKAP QC PUSAT tetap aman)
+  if (cfg.outputFolderId) {
+    try {
+      var rootFolder = DriveApp.getFolderById(cfg.outputFolderId);
+      if (rootFolder && typeof rootFolder.getFoldersByName === "function") {
+        var subIter = rootFolder.getFoldersByName(REPORT_SUBFOLDER_NAME);
+        while (subIter && typeof subIter.hasNext === "function" && subIter.hasNext()) {
+          var subFolder = subIter.next();
+          if (!subFolder || typeof subFolder.getFiles !== "function") continue;
+          var fileIter = subFolder.getFiles();
+          while (fileIter && typeof fileIter.hasNext === "function" && fileIter.hasNext()) {
+            var rf = fileIter.next();
+            var rfId = rf && typeof rf.getId === "function" ? String(rf.getId() || "").trim() : "";
+            if (!rfId || protectedIds[rfId] || trashedIdSet[rfId]) continue;
+            if (typeof rf.isTrashed === "function" && rf.isTrashed()) continue;
+            if (typeof rf.setTrashed === "function") {
+              rf.setTrashed(true);
+              trashedIdSet[rfId] = true;
+              trashedFiles++;
+            }
+          }
+        }
+      }
+    } catch (folderErr) {
+      Logger.log("Gagal membersihkan subfolder Laporan QC: " + folderErr.toString());
+    }
+  }
+
+  var targetSheets = [
+    SHEET_NAMES.DASHBOARD,
+    SHEET_NAMES.KUNJUNGAN,
+    SHEET_NAMES.ROWBODY,
+    SHEET_NAMES.FINISHING,
+    SHEET_NAMES.DETAIL,
+    SHEET_NAMES.KERUSAKAN,
+    SHEET_NAMES.META
+  ];
+
+  var clearedSheets = 0;
+  for (var s = 0; s < targetSheets.length; s++) {
+    var sh = rekapSs.getSheetByName(targetSheets[s]);
+    if (!sh) continue;
+    var lastRow = sh.getLastRow();
+    if (lastRow >= 2) {
+      if (typeof sh.deleteRows === "function") {
+        sh.deleteRows(2, lastRow - 1);
+      } else {
+        sh.getRange(2, 1, lastRow - 1, Math.max(1, sh.getLastColumn ? sh.getLastColumn() : 30)).clearContent();
+      }
+    }
+    clearedSheets++;
+  }
+
+  refreshDashboardSheet(rekapSs);
+
+  return jsonResponse({
+    status: "success",
+    clearedSheets: clearedSheets,
+    trashedFiles: trashedFiles,
+    message: "Seluruh data QC (" + clearedSheets + " sheet & " + trashedFiles + " file Drive) berhasil direset bersih."
+  });
+}
+
+/**
+ * Jalankan manual di editor Apps Script jika ingin mereset seluruh data QC langsung dari Google Sheets.
+ */
+function resetAllQcData() {
+  var res = handleResetQcData({ confirm: "RESET" }, getProps());
+  return JSON.parse(res.getContent());
 }
