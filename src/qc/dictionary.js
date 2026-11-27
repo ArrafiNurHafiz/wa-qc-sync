@@ -80,7 +80,7 @@ export const QC_CRITERIA = [
   {
     id: "TOLERANSI_UKURAN",
     row: 23,
-    group: "Toleransi & Presisi",
+    group: "Toleransi & Presisi Konstruksi",
     shortLabel: "Ukuran",
     label: "Toleransi Ukuran (± 2mm)",
     aliases: ["ukuran", "toleransi ukuran", "dimensi", "toleransi ukuran 2mm"]
@@ -88,7 +88,7 @@ export const QC_CRITERIA = [
   {
     id: "KESIKUAN",
     row: 24,
-    group: "Toleransi & Presisi",
+    group: "Toleransi & Presisi Konstruksi",
     shortLabel: "Kesikuan",
     label: "Kesikuan (90°)",
     aliases: ["kesikuan", "siku", "kesikuan 90"]
@@ -96,14 +96,22 @@ export const QC_CRITERIA = [
   {
     id: "DORENG",
     row: 25,
-    group: "Toleransi & Presisi",
+    group: "Toleransi & Presisi Konstruksi",
     shortLabel: "Doreng",
     label: "Doreng (≤ 10%)",
     aliases: ["doreng", "gubal", "doreng 10"]
   },
   {
+    id: "CRACK",
+    row: 26,
+    group: "Toleransi & Presisi Konstruksi",
+    shortLabel: "Crack",
+    label: "Crack / Pecah",
+    aliases: ["crack", "pecah", "retak", "belah"]
+  },
+  {
     id: "WARNA",
-    row: 27,
+    row: 28,
     group: "Kualitas Akhir",
     shortLabel: "Warna",
     label: "Warna Sesuai Color Card",
@@ -111,7 +119,7 @@ export const QC_CRITERIA = [
   },
   {
     id: "KEHALUSAN",
-    row: 28,
+    row: 29,
     group: "Kualitas Akhir",
     shortLabel: "Kehalusan",
     label: "Kehalusan Permukaan",
@@ -119,7 +127,7 @@ export const QC_CRITERIA = [
   },
   {
     id: "BEBAS_LUBANG",
-    row: 29,
+    row: 30,
     group: "Kualitas Akhir",
     shortLabel: "Lubang",
     label: "Bebas Lubang",

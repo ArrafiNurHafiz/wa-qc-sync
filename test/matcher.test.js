@@ -13,11 +13,11 @@ import {
   matchCriterion
 } from "../src/qc/matcher.js";
 
-test("kamus lokal bebas database produk/vendor dan memuat 14 kriteria standar", () => {
+test("kamus lokal bebas database produk/vendor dan memuat 15 kriteria standar", () => {
   assert.equal(PRODUCT_MASTER.length, 0);
   assert.equal(VENDORS_PRE.length, 0);
   assert.equal(VENDORS_FIN.length, 0);
-  assert.equal(QC_CRITERIA.length, 14);
+  assert.equal(QC_CRITERIA.length, 15);
 });
 
 test("matchProduct mengembalikan null saat database kosong dan mencocokkan bila ada data dinamis", () => {
@@ -65,6 +65,10 @@ test("matchCriterion mencocokkan 14 kriteria dan fallback ke Lainnya jika < 0.50
   const typo = matchCriterion("Cuter Mark");
   assert.equal(typo.id, "CUTTER_MARK");
   assert.equal(typo.corrected, true);
+
+  const crack = matchCriterion("Crack");
+  assert.equal(crack.id, "CRACK");
+  assert.equal(crack.isOther, false);
 
   const other = matchCriterion("Pecah bagian gagang belakang");
   assert.equal(other.id, "LAINNYA");

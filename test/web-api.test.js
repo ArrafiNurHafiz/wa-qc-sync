@@ -80,8 +80,8 @@ test("GET /api/master, /api/help, dan /api/config tidak membocorkan API_SECRET",
     const master = await fetch(`${baseUrl}/api/master`).then((r) => r.json());
     assert.equal(master.success, true);
     assert.equal(master.products.length, 0);
-    assert.equal(master.criteria.length, 14);
-    assert.equal(master.criteria.length, 14);
+    assert.equal(master.criteria.length, 15);
+    assert.equal(master.criteria.length, 15);
 
     const help = await fetch(`${baseUrl}/api/help`).then((r) => r.json());
     assert.match(help.templateText, /^FORM QC/m);
