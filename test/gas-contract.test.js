@@ -119,6 +119,11 @@ function createMockGasEnv({ apiSecret = "", generatePdf = "true" } = {}) {
       return new MockRange(this, 1, 1, Math.max(1, this.rows.length), maxCols);
     }
     setFrozenRows(n) { this.frozenRows = n; }
+    hideSheet() { this.hidden = true; return this; }
+    insertRowAfter(afterRow) {
+      this.rows.splice(afterRow, 0, []);
+      return this;
+    }
     copyTo(targetSs) {
       const copy = new MockSheet(this.name + " (copy)");
       copy.rows = this.rows.map((r) => [...r]);
@@ -302,6 +307,14 @@ test("gas/Code_QC.gs mengeksekusi setupQcTemplate, LOG_QC_REPORT (multi-tab >4 i
   assert.ok(rekapSs.getSheetByName("REKAP_QC_KUNJUNGAN"));
   assert.ok(rekapSs.getSheetByName("REKAP_QC_DETAIL_ITEM"));
   assert.ok(rekapSs.getSheetByName("LOG_KERUSAKAN"));
+  assert.ok(rekapSs.getSheetByName("_LOG_META")?.hidden);
+  const kHeaders = rekapSs.getSheetByName("REKAP_QC_KUNJUNGAN").rows[0];
+  assert.equal(kHeaders[11], "Ati");
+  assert.equal(kHeaders[15], "Bluestain");
+  assert.equal(kHeaders[22], "Crack");
+  assert.equal(kHeaders[26], "Lainnya");
+  assert.equal(kHeaders.includes("Link PDF"), false);
+  assert.equal(kHeaders.includes("Idempotency Key"), false);
 
   // 2. Reject jika API_SECRET salah
   const badSecret = JSON.parse(env.sandbox.doPost({
@@ -360,9 +373,9 @@ test("gas/Code_QC.gs mengeksekusi setupQcTemplate, LOG_QC_REPORT (multi-tab >4 i
   assert.equal(tab1.getRange("B4").getValue(), "Londo");
   assert.equal(tab1.getRange("J4").getValue(), "PO-112");
   assert.equal(tab1.getRange("B9").getValue(), 1000);
-  assert.equal(tab1.getRange("C18").getValue(), false); // BLUESTAIN NOK
+  assert.equal(tab1.getRange("C18").getValue(), 30); // BLUESTAIN 30 pcs rusak
   assert.equal(tab1.getRange("C27").getValue(), "–"); // WARNA NA
-  assert.equal(tab1.getRange("C14").getValue(), true); // ATI OK
+  assert.equal(tab1.getRange("C14").getValue(), 0); // ATI 0 rusak
   assert.equal(tab1.getRange("C32").getValue(), true); // Bersyarat
   assert.equal(tab1.getRange("B34").getValue(), 970);
 
@@ -387,6 +400,11 @@ test("gas/Code_QC.gs mengeksekusi setupQcTemplate, LOG_QC_REPORT (multi-tab >4 i
   assert.equal(dashRes.data.reports.length, 1);
   assert.equal(dashRes.data.items.length, 5);
   assert.equal(dashRes.data.defects.length, 1);
+  const kRow = rekapSs.getSheetByName("REKAP_QC_KUNJUNGAN").rows[1];
+  assert.equal(kRow[11], 0); // Ati = 0
+  assert.equal(kRow[15], 30); // Bluestain = 30
+  assert.equal(kRow[22], 0); // Crack = 0
+  assert.equal(kRow[26], 0); // Lainnya = 0
 
   // 6. VOID_QC_REPORT + tolak void kedua (ALREADY_VOID)
   const voidRes = JSON.parse(env.sandbox.doPost({
@@ -519,4 +537,104 @@ test("gas/Code_QC.gs mengekspor PDF dengan parameter fit-to-page (scale=4) dan m
   assert.match(urls[0], /scale=4/);
   assert.match(urls[0], /top_margin=0\.25/);
   assert.match(urls[0], /bottom_margin=0\.25/);
+});
+
+test("gas/Code_QC.gs mengubah A22 ke TOLERANSI & PRESISI KONSTRUKSI, menyisipkan baris Crack, dan mengisi angka rusak tepat barisnya", () => {
+  const env = createMockGasEnv({ generatePdf: "false" });
+  const tplSheet = env.spreadsheets.get("tpl-sheet-1").getSheetByName("Form QC Lap");
+  const rows = [
+    [14, "Bebas Ati"], [15, "Bebas Pulur"], [16, "Bebas Teter"], [17, "Bebas Mata Mati (Lubang)"],
+    [18, "Bebas Bluestain / Jamur"], [19, "Bebas Cutter Mark"], [20, "Bebas Bekas Gerinda"], [21, "Bebas Serat Balik"],
+    [22, "TOLERANSI & PRESISI — CENTANG BILA SESUAI"],
+    [23, "Toleransi Ukuran (± 2mm)"], [24, "Kesikuan (90°)"], [25, "Doreng (≤ 10%)"],
+    [26, "KUALITAS AKHIR"], [27, "Warna Sesuai Color Card"], [28, "Kehalusan Permukaan"], [29, "Bebas Lubang"],
+    [30, "HASIL PEMERIKSAAN"], [31, "Keputusan"], [33, "Catatan Singkat"], [34, "Jumlah Barang Diterima"],
+    [35, "CATATAN UMUM KUNJUNGAN"], [36, "DIPERIKSA OLEH (QC)"]
+  ];
+  for (const [r, label] of rows) tplSheet.getRange(`A${r}`).setValue(label);
+
+  env.sandbox.setupQcTemplate();
+  assert.equal(tplSheet.getRange("A22").getValue(), "TOLERANSI & PRESISI KONSTRUKSI");
+  assert.equal(tplSheet.getRange("A26").getValue(), "Crack");
+  assert.equal(tplSheet.getRange("A32").getValue(), "Keputusan");
+
+  const res = JSON.parse(env.sandbox.doPost({
+    postData: {
+      contents: JSON.stringify({
+        action: "LOG_QC_REPORT",
+        data: {
+          noLaporan: "QC-CRACK-1",
+          idempotencyKey: "idem-crack-1",
+          tanggalPemeriksaan: "27/11/2026",
+          vendor: "Londo",
+          noDokumenPo: "PO-CRK-1",
+          petugasQc: "Budi",
+          items: [
+            {
+              kodeRawBody: "",
+              namaItem: "Produk Custom",
+              tahapBarang: "Unfinish",
+              qtyDiperiksa: 1000,
+              rusak: [
+                { kriteriaId: "BLUESTAIN", label: "Bebas Bluestain / Jamur", qty: 30 },
+                { kriteriaId: "CRACK", label: "Crack / Pecah", qty: 15 }
+              ],
+              totalRusak: 45,
+              qtyLolos: 955,
+              kriteriaStatus: { BLUESTAIN: "NOK", CRACK: "NOK" },
+              keputusan: "Bersyarat",
+              catatanSingkat: "Rusak: 45 pcs"
+            }
+          ]
+        }
+      })
+    }
+  }).getContent());
+  assert.equal(res.status, "success");
+
+  const tab1 = env.spreadsheets.get(res.fileId).getSheets()[0];
+  assert.equal(tab1.getRange("C18").getValue(), 30);
+  assert.equal(tab1.getRange("C26").getValue(), 15);
+  assert.equal(tab1.getRange("C30").getValue(), 0);
+  assert.equal(tab1.getRange("C33").getValue(), true); // Keputusan Bersyarat tergeser ke baris 33
+  assert.equal(tab1.getRange("B35").getValue(), 955); // Jumlah Barang Diterima tergeser ke baris 35
+
+  const kRow = env.spreadsheets.get("rekap-ss-1").getSheetByName("REKAP_QC_KUNJUNGAN").rows[1];
+  assert.equal(kRow[22], 15); // Kolom Crack = 15
+
+  // APPEND_QC_ITEM: tambahkan Item #2 ke file Sheet yang sama
+  const appendRes = JSON.parse(env.sandbox.doPost({
+    postData: {
+      contents: JSON.stringify({
+        action: "APPEND_QC_ITEM",
+        data: {
+          noLaporan: "QC-CRACK-1",
+          fileId: res.fileId,
+          tanggalPemeriksaan: "27/11/2026",
+          vendor: "Londo",
+          noDokumenPo: "PO-CRK-1",
+          petugasQc: "Budi",
+          item: {
+            kodeRawBody: "",
+            namaItem: "Produk Lanjutan 2",
+            tahapBarang: "Unfinish",
+            qtyDiperiksa: 200,
+            rusak: [{ kriteriaId: "CRACK", label: "Crack / Pecah", qty: 10 }],
+            totalRusak: 10,
+            qtyLolos: 190,
+            kriteriaStatus: { CRACK: "NOK" },
+            keputusan: "Bersyarat",
+            catatanSingkat: "Rusak: 10 pcs"
+          }
+        }
+      })
+    }
+  }).getContent());
+  assert.equal(appendRes.status, "success");
+  assert.equal(appendRes.totalItem, 2);
+  assert.equal(tab1.getRange("E8").getValue(), "Produk Lanjutan 2");
+  assert.equal(tab1.getRange("F26").getValue(), 10);
+  assert.equal(tab1.getRange("E35").getValue(), 190);
+  assert.equal(kRow[5], 2); // Total Item = 2
+  assert.equal(kRow[22], 25); // Crack akumulasi = 15 + 10
 });
