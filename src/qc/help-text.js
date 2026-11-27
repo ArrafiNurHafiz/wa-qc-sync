@@ -20,6 +20,7 @@ Serat Balik :
 Ukuran      : 
 Kesikuan    : 
 Doreng      : 
+Crack       : 
 Warna       : 
 Kehalusan   : 
 Lubang      : 
@@ -30,8 +31,13 @@ Catatan  :
 Keputusan: `;
 }
 
-export function getQcTemplateText(itemCount = 4) {
-  const count = Math.max(1, Math.min(20, parseInt(itemCount, 10) || 4));
+export function getQcItemTemplateText(itemNumber = 2) {
+  const num = Math.max(1, parseInt(itemNumber, 10) || 2);
+  return buildTemplateItemBlock(num);
+}
+
+export function getQcTemplateText(itemCount = 1) {
+  const count = Math.max(1, Math.min(20, parseInt(itemCount, 10) || 1));
   const itemBlocks = [];
   for (let i = 1; i <= count; i++) {
     itemBlocks.push(buildTemplateItemBlock(i));
@@ -52,7 +58,7 @@ export function getCriteriaText() {
   }
 
   const lines = [
-    "📋 *14 KRITERIA QC KAYU (DOK. QC-WOOD-01)*",
+    "📋 *15 KRITERIA QC KAYU (DOK. QC-WOOD-01)*",
     "━━━━━━━━━━━━━━━━━━━━",
     ""
   ];
@@ -66,7 +72,7 @@ export function getCriteriaText() {
   }
 
   lines.push("*Kategori Tambahan:*");
-  lines.push("• *Lainnya* — Cacat di luar 14 kriteria (contoh: `Retak ujung 5`)");
+  lines.push("• *Lainnya* — Cacat di luar 15 kriteria (contoh: `Retak ujung 5`)");
   lines.push("");
   lines.push("*Standar Kadar Air (MC):*");
   lines.push(`• Unfinish / Mentah: ≤ ${MC_LIMITS.Unfinish}%`);
@@ -87,7 +93,8 @@ export function getHelpText(productCount = 66) {
    • Isi *angka pcs rusak* pada baris kerusakan yang ditemukan
    • Baris aman biarkan kosong (atau boleh dihapus)
    • Baris tidak berlaku isi *-* atau *NA*
-   • Untuk > 1 barang dalam 1 kunjungan, pisahkan dengan baris *---*
+   • Untuk lanjut ke item berikutnya pada laporan yang sama, kirim mulai *[ITEM 2]* (atau ketik *qc2*)
+   • Untuk membuat laporan kunjungan baru, kirim *FORM QC* baru (atau ketik *qc*)
 
 📌 *Contoh Singkat:*
 FORM QC
@@ -105,8 +112,9 @@ Keputusan: Bersyarat
 Sistem otomatis menghitung *Total Rusak = 50* & *Lolos = 950*, memakai *Keputusan* manual Anda (atau otomatis bila dikosongkan), lalu menyimpan form ke Google Drive.
 
 🧭 *Perintah Bantuan:*
-• *qc* / *#QC* — Kirim template FORM QC kosong (4 slot item)
-• *#KRITERIA* — Daftar 14 kriteria & batas MC
+• *qc* / *#QC* — Kirim template FORM QC kosong (Item 1)
+• *qc2* — Kirim template lanjutan [ITEM 2] untuk kunjungan yang sama
+• *#KRITERIA* — Daftar 15 kriteria & batas MC
 • *#STATUS* — Cek koneksi bot & Google Apps Script
 
 _Catatan: Nama produk & vendor bebas diketik langsung (tidak memakai database master)._`;

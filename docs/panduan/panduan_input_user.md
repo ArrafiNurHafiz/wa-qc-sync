@@ -22,8 +22,8 @@ Karena petugas QC berada di lokasi vendor menggunakan HP dan kuota seluler, inpu
 
 ## 2. Template Resmi WhatsApp (`FORM QC`)
 
-### 2.1 Template Kosong yang Dikirim Bot Saat Ketik `qc` (4 Slot Item)
-> Saat petugas mengetik `qc` atau `#QC`, bot mengirim template kosong untuk **4 item** (`[ITEM 1]` s.d. `[ITEM 4]`). Jika kunjungan hanya 1–3 item, slot item yang tidak terpakai **boleh dibiarkan kosong atau dihapus**.
+### 2.1 Template Kosong yang Dikirim Bot Saat Ketik `qc` (Item 1)
+> Saat petugas mengetik `qc` atau `#QC`, bot mengirim template ringkas **`FORM QC` (1 item)**. Jika ingin menambah item ke-2 pada kunjungan yang sama, kirim **`[ITEM 2]`** (atau ketik `qc2`). Jika ingin membuat laporan kunjungan baru, kirim **`FORM QC`** baru (atau ketik `qc`).
 
 ```text
 FORM QC
@@ -48,6 +48,7 @@ Serat Balik :
 Ukuran      : 
 Kesikuan    : 
 Doreng      : 
+Crack       : 
 Warna       : 
 Kehalusan   : 
 Lubang      : 
@@ -56,8 +57,6 @@ Lainnya     :
 Catatan  : 
 [Keputusan: Lolos / Bersyarat / Tolak]
 Keputusan: 
----
-[ITEM 2] ... (berulang hingga [ITEM 4])
 ```
 
 ### 2.2 Contoh Pengisian Nyata (1 Item — Ada Kerusakan)

@@ -17,6 +17,7 @@ import {
   isQcRelevantMessage,
   parseQcMessage,
   getQcTemplateText,
+  getQcItemTemplateText,
   getHelpText,
   getCriteriaText
 } from "../qc/index.js";
@@ -47,10 +48,12 @@ export function buildQcWebhookPayload(report, { senderName = "-", idempotencyKey
   };
 }
 
-export function formatQcReplyMessage(report, gasResult = {}, { corrected = false, fromQueue = false } = {}) {
-  const title = fromQueue
-    ? "✅ *LAPORAN QC OFFLINE BERHASIL DICATAT*"
-    : "✅ *LAPORAN QC BERHASIL DICATAT*";
+export function formatQcReplyMessage(report, gasResult = {}, { corrected = false, fromQueue = false, appendMode = false, itemNumber = 1 } = {}) {
+  const title = appendMode
+    ? `✅ *ITEM #${itemNumber} DITAMBAHKAN KE LAPORAN*`
+    : fromQueue
+      ? "✅ *LAPORAN QC OFFLINE BERHASIL DICATAT*"
+      : "✅ *LAPORAN QC BERHASIL DICATAT*";
 
   const lines = [
     title,
@@ -86,6 +89,10 @@ export function formatQcReplyMessage(report, gasResult = {}, { corrected = false
   if (corrected) {
     lines.push("⚠️ _Nama produk/vendor disesuaikan otomatis dari kamus master._");
   }
+  if (!fromQueue) {
+    const nextIdx = appendMode ? itemNumber + 1 : ((report.totalItem || report.items?.length || 1) + 1);
+    lines.push("", `💡 _Lanjut item ke-${nextIdx}? Kirim *[ITEM ${nextIdx}]* (atau ketik *qc${nextIdx}*). Laporan baru: ketik *qc*._`);
+  }
 
   return lines.join("\n");
 }
@@ -103,6 +110,8 @@ function extractMessageText(msg) {
   );
 }
 
+const defaultActiveSessions = new Map();
+
 /**
  * Menangani satu pesan teks masuk (dipakai Baileys & unit test terisolasi).
  */
@@ -116,6 +125,7 @@ export async function handleIncomingTextMessage(
     queue,
     allowedGroups,
     gasUrl,
+    sessionStore = defaultActiveSessions,
     notifyDataMutation = () => {},
     sendToGas = (action, data) => sendToGasWebhook(action, data, { gasUrl }),
     checkGas = () => checkGasStatus({ gasUrl })
@@ -142,12 +152,20 @@ export async function handleIncomingTextMessage(
     }
   }
 
-  const parsed = confirmedParsed || parseQcMessage(trimmed);
+  const sessionKey = `${chatJid}:${participant || chatJid}`;
+  const activeSession = sessionStore.get(sessionKey) || null;
+  const parsed = confirmedParsed || parseQcMessage(trimmed, { session: activeSession });
   if (!parsed) return { handled: false, reason: "unparsed" };
 
   if (parsed.command === "QC_TEMPLATE") {
     await sock.sendMessage(chatJid, { text: getQcTemplateText() }, replyOpts);
     return { handled: true, command: "QC_TEMPLATE" };
+  }
+
+  if (parsed.command === "QC_ITEM_TEMPLATE") {
+    const nextNum = activeSession?.itemCount ? activeSession.itemCount + 1 : parsed.itemNumber;
+    await sock.sendMessage(chatJid, { text: getQcItemTemplateText(nextNum) }, replyOpts);
+    return { handled: true, command: "QC_ITEM_TEMPLATE", itemNumber: nextNum };
   }
 
   if (parsed.command === "HELP") {
@@ -262,13 +280,26 @@ export async function handleIncomingTextMessage(
     return { handled: true, requiresConfirmation: true, token };
   }
 
-  // Bangun payload GAS LOG_QC_REPORT
+  // Bangun payload GAS LOG_QC_REPORT atau APPEND_QC_ITEM
   const idempotencyKey = `${chatJid}:${messageId || Date.now()}`;
-  const qcData = buildQcWebhookPayload(parsed.report, { senderName, idempotencyKey });
-  const webhookPayload = { action: "LOG_QC_REPORT", data: qcData };
+  const isAppend = parsed.type === "QC_ITEM_APPEND";
+  const gasAction = isAppend ? "APPEND_QC_ITEM" : "LOG_QC_REPORT";
+  const qcData = isAppend
+    ? {
+        noLaporan: activeSession.noLaporan,
+        fileId: activeSession.fileId,
+        vendor: activeSession.vendor,
+        noDokumenPo: activeSession.noDokumenPo,
+        tanggalPemeriksaan: activeSession.tanggalPemeriksaan,
+        petugasQc: activeSession.petugasQc,
+        idempotencyKey,
+        item: parsed.item
+      }
+    : buildQcWebhookPayload(parsed.report, { senderName, idempotencyKey });
+  const webhookPayload = { action: gasAction, data: qcData };
 
   try {
-    const gasRes = await sendToGas("LOG_QC_REPORT", qcData);
+    const gasRes = await sendToGas(gasAction, qcData);
     if (gasRes?.status !== "success") {
       await sock.sendMessage(
         chatJid,
@@ -278,16 +309,46 @@ export async function handleIncomingTextMessage(
       return { handled: true, failed: true };
     }
 
+    const nextCount = isAppend
+      ? (gasRes.totalItem || (activeSession.itemCount || 1) + 1)
+      : (qcData.items?.length || 1);
+
+    if (isAppend) {
+      activeSession.itemCount = nextCount;
+      if (gasRes.pdfUrl) activeSession.pdfUrl = gasRes.pdfUrl;
+      if (gasRes.sheetUrl) activeSession.sheetUrl = gasRes.sheetUrl;
+      activeSession.updatedAt = Date.now();
+      sessionStore.set(sessionKey, activeSession);
+    } else {
+      sessionStore.set(sessionKey, {
+        noLaporan: gasRes.noLaporan || qcData.noLaporan,
+        fileId: gasRes.fileId || "",
+        sheetUrl: gasRes.sheetUrl || "",
+        pdfUrl: gasRes.pdfUrl || "",
+        vendor: qcData.vendor,
+        noDokumenPo: qcData.noDokumenPo,
+        tanggalPemeriksaan: qcData.tanggalPemeriksaan,
+        petugasQc: qcData.petugasQc,
+        itemCount: nextCount,
+        updatedAt: Date.now()
+      });
+    }
+
     notifyDataMutation();
+    const replyReport = isAppend ? parsed.report : qcData;
     await sock.sendMessage(
       chatJid,
       {
-        text: formatQcReplyMessage(qcData, gasRes, { corrected: parsed.corrected }),
+        text: formatQcReplyMessage(replyReport, gasRes, {
+          corrected: parsed.corrected,
+          appendMode: isAppend,
+          itemNumber: nextCount
+        }),
         mentions: participant ? [participant] : undefined
       },
       replyOpts
     );
-    return { handled: true, success: true, noLaporan: gasRes.noLaporan || qcData.noLaporan };
+    return { handled: true, success: true, noLaporan: gasRes.noLaporan || qcData.noLaporan, itemNumber: nextCount };
   } catch (err) {
     if (isRetryableGasError(err)) {
       queue.saveToQueue(participant, chatJid, trimmed, "network_error", webhookPayload);

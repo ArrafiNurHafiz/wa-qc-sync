@@ -29,6 +29,7 @@ export {
 
 export {
   getQcTemplateText,
+  getQcItemTemplateText,
   getHelpText,
   getCriteriaText
 } from "./help-text.js";

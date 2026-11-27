@@ -150,3 +150,63 @@ test("router WhatsApp mengirim vendor/produk custom langsung ke GAS dan fallback
     rmSync(ctx.dir, { recursive: true, force: true });
   }
 });
+
+test("router WhatsApp mendukung alur berurutan FORM QC ([ITEM 1]) -> [ITEM 2] (APPEND_QC_ITEM) -> FORM QC baru", async () => {
+  const ctx = createTestRuntime({
+    sendToGas: async (action, data) => {
+      ctx.gasCalls.push({ action, data });
+      return {
+        status: "success",
+        duplicate: false,
+        noLaporan: data.noLaporan,
+        fileId: "sheet-file-1",
+        sheetUrl: "https://docs.google.com/spreadsheets/d/sheet-file-1",
+        pdfUrl: "https://drive.google.com/file/d/pdf-1/view",
+        totalItem: action === "APPEND_QC_ITEM" ? 2 : 1
+      };
+    }
+  });
+  const sessionStore = new Map();
+  const deps = { ...ctx.deps, sessionStore };
+
+  try {
+    // 1. Kirim Item 1 via FORM QC
+    await handleIncomingTextMessage({
+      chatJid: "1203630001@g.us",
+      participant: "62812@s.whatsapp.net",
+      senderName: "Budi (+62812)",
+      text: "FORM QC\nVendor: CV Jati\nPO: PO-01\n[ITEM 1]\nBarang: Meja A\nPeriksa: 100\nKeputusan: Lolos",
+      messageId: "s1"
+    }, deps);
+    assert.equal(ctx.gasCalls[0].action, "LOG_QC_REPORT");
+    const noLap1 = ctx.gasCalls[0].data.noLaporan;
+    assert.match(ctx.sentMessages[0].content.text, /\[ITEM 2\]/);
+
+    // 2. Lanjut Item 2 tanpa tulis ulang FORM QC / Vendor / PO
+    await handleIncomingTextMessage({
+      chatJid: "1203630001@g.us",
+      participant: "62812@s.whatsapp.net",
+      senderName: "Budi (+62812)",
+      text: "[ITEM 2]\nBarang: Kursi B\nPeriksa: 50\nCrack: 5\nKeputusan: Bersyarat",
+      messageId: "s2"
+    }, deps);
+    assert.equal(ctx.gasCalls[1].action, "APPEND_QC_ITEM");
+    assert.equal(ctx.gasCalls[1].data.noLaporan, noLap1);
+    assert.equal(ctx.gasCalls[1].data.fileId, "sheet-file-1");
+    assert.equal(ctx.gasCalls[1].data.item.namaItem, "Kursi B");
+    assert.match(ctx.sentMessages[1].content.text, /ITEM #2 DITAMBAHKAN/i);
+
+    // 3. Mulai kunjungan baru via FORM QC lagi
+    await handleIncomingTextMessage({
+      chatJid: "1203630001@g.us",
+      participant: "62812@s.whatsapp.net",
+      senderName: "Budi (+62812)",
+      text: "FORM QC\nVendor: CV Baru\nPO: PO-02\n[ITEM 1]\nBarang: Lemari C\nPeriksa: 20\nKeputusan: Lolos",
+      messageId: "s3"
+    }, deps);
+    assert.equal(ctx.gasCalls[2].action, "LOG_QC_REPORT");
+    assert.equal(ctx.gasCalls[2].data.vendor, "CV Baru");
+  } finally {
+    rmSync(ctx.dir, { recursive: true, force: true });
+  }
+});

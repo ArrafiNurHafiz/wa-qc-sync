@@ -1,12 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseQcMessage } from "../src/qc/qc-parser.js";
-import { getQcTemplateText, getHelpText, getCriteriaText } from "../src/qc/help-text.js";
+import { getQcTemplateText, getQcItemTemplateText, getHelpText, getCriteriaText } from "../src/qc/help-text.js";
 
-test("perintah qc / #QC kosong dan perintah bantu mengembalikan command yang benar", () => {
+test("perintah qc / #QC kosong, qc2, dan perintah bantu mengembalikan command yang benar", () => {
   assert.deepEqual(parseQcMessage("qc"), { command: "QC_TEMPLATE" });
   assert.deepEqual(parseQcMessage("#QC"), { command: "QC_TEMPLATE" });
   assert.deepEqual(parseQcMessage("  #qc  "), { command: "QC_TEMPLATE" });
+  assert.deepEqual(parseQcMessage("qc2"), { command: "QC_ITEM_TEMPLATE", itemNumber: 2 });
+  assert.deepEqual(parseQcMessage("qc 3"), { command: "QC_ITEM_TEMPLATE", itemNumber: 3 });
   assert.deepEqual(parseQcMessage("#HELP"), { command: "HELP" });
   assert.deepEqual(parseQcMessage("#KRITERIA"), { command: "KRITERIA" });
   assert.deepEqual(parseQcMessage("#PRODUK"), { command: "LIST_PRODUCTS" });
@@ -16,11 +18,13 @@ test("perintah qc / #QC kosong dan perintah bantu mengembalikan command yang ben
   const tpl = getQcTemplateText();
   assert.match(tpl, /^FORM QC/m);
   assert.match(tpl, /\[ITEM 1\]/);
-  assert.match(tpl, /\[ITEM 4\]/);
-  assert.equal(tpl.match(/^---$/gm)?.length, 3);
-  assert.equal(tpl.match(/^Keputusan:/gm)?.length, 4);
+  assert.doesNotMatch(tpl, /\[ITEM 2\]/);
+  assert.doesNotMatch(tpl, /^---$/m);
+  assert.equal(tpl.match(/^Keputusan:/gm)?.length, 1);
+  assert.match(tpl, /Crack\s*:/);
   assert.match(tpl, /Bluestain\s*:/);
   assert.match(tpl, /Lainnya\s*:/);
+  assert.match(getQcItemTemplateText(2), /^\[ITEM 2\]/m);
   assert.match(getHelpText(66), /FORM QC/);
   assert.match(getCriteriaText(), /Bebas Bluestain/);
 });
@@ -140,7 +144,7 @@ Lainnya : Retak ujung 5`);
   assert.equal(parsed.report.items[0].qtyLolos, 95);
 });
 
-test("parseQcMessage dari template kosong 4 item: mengabaikan slot item kosong dan mendukung pengisian 4 item penuh", () => {
+test("parseQcMessage template 1 item dan lanjutan [ITEM 2] berurutan", () => {
   const tpl = getQcTemplateText();
   const filled1 = tpl
     .replace("Vendor   : ", "Vendor   : Londo")
@@ -150,24 +154,35 @@ test("parseQcMessage dari template kosong 4 item: mengabaikan slot item kosong d
 
   const res1 = parseQcMessage(filled1);
   assert.equal(res1.error, undefined);
+  assert.equal(res1.type, "QC_REPORT");
   assert.equal(res1.report.items.length, 1);
   assert.equal(res1.report.items[0].kodeRawBody, "");
   assert.equal(res1.report.items[0].namaItem, "Sendok Oval");
   assert.equal(res1.report.items[0].qtyLolos, 100);
   assert.equal(res1.report.items[0].keputusan, "Tolak");
 
-  const filled4 = tpl
-    .replace("Vendor   : ", "Vendor   : Londo")
-    .replace("PO       : ", "PO       : PO-4-04")
-    .replace("[ITEM 1]\nBarang   : \nTahap    : Unfinish\nPeriksa  : \nMC %     : ", "[ITEM 1]\nBarang   : Sendok Oval\nTahap    : Unfinish\nPeriksa  : 100\nMC %     : 13.5")
-    .replace("[ITEM 2]\nBarang   : \nTahap    : Unfinish\nPeriksa  : \nMC %     : ", "[ITEM 2]\nBarang   : Sutil Besar\nTahap    : Unfinish\nPeriksa  : 200\nMC %     : 14.0")
-    .replace("[ITEM 3]\nBarang   : \nTahap    : Unfinish\nPeriksa  : \nMC %     : ", "[ITEM 3]\nBarang   : Sendok Oval\nTahap    : Finish\nPeriksa  : 150\nMC %     : 15.0")
-    .replace("[ITEM 4]\nBarang   : \nTahap    : Unfinish\nPeriksa  : \nMC %     : ", "[ITEM 4]\nBarang   : Sutil Besar\nTahap    : Finish\nPeriksa  : 50\nMC %     : 16.0");
+  const tpl2 = getQcItemTemplateText(2)
+    .replace("Barang   : \nTahap    : Unfinish\nPeriksa  : \nMC %     : ", "Barang   : Kursi Baru\nTahap    : Unfinish\nPeriksa  : 50\nMC %     : 12.0")
+    .replace("Crack       : ", "Crack       : 5")
+    .replace("\nKeputusan: ", "\nKeputusan: Bersyarat");
 
-  const res4 = parseQcMessage(filled4);
-  assert.equal(res4.error, undefined);
-  assert.equal(res4.report.items.length, 4);
-  assert.equal(res4.report.items[3].qtyDiperiksa, 50);
+  // Tanpa sesi aktif sebelumnya harus ditolak dengan panduan
+  const noSession = parseQcMessage(tpl2);
+  assert.equal(noSession.needsActiveSession, true);
+  assert.ok(noSession.error);
+
+  // Dengan sesi aktif dari FORM QC sebelumnya -> masuk QC_ITEM_APPEND
+  const res2 = parseQcMessage(tpl2, {
+    session: { vendor: "Londo", noDokumenPo: "PO-4-01", petugasQc: "Budi" }
+  });
+  assert.equal(res2.error, undefined);
+  assert.equal(res2.type, "QC_ITEM_APPEND");
+  assert.equal(res2.itemNumber, 2);
+  assert.equal(res2.report.vendor, "Londo");
+  assert.equal(res2.item.namaItem, "Kursi Baru");
+  assert.equal(res2.item.qtyLolos, 45);
+  assert.equal(res2.item.rusak[0].kriteriaId, "CRACK");
+  assert.equal(res2.item.keputusan, "Bersyarat");
 });
 
 test("parseQcMessage menerima produk dan vendor custom bebas di luar kamus lokal", () => {

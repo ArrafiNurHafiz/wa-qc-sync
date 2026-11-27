@@ -116,24 +116,29 @@ export function isQcRelevantMessage(text) {
   const trimmed = String(text || "").trim();
   if (!trimmed) return false;
   if (trimmed.startsWith("#")) return true;
-  if (/^qc$/i.test(trimmed)) return true;
+  if (/^qc(?:\s*\d+)?$/i.test(trimmed)) return true;
   if (/^form\s+qc\b/i.test(trimmed)) return true;
+  if (/^\[ITEM\s*\d+\]/i.test(trimmed)) return true;
   return false;
 }
 
 /**
- * Mengurai pesan WhatsApp (perintah bantu atau FORM QC Gaya 4).
+ * Mengurai pesan WhatsApp (perintah bantu, FORM QC baru, atau lanjutan [ITEM 2]+).
  */
-export function parseQcMessage(text) {
+export function parseQcMessage(text, options = {}) {
   if (!text || typeof text !== "string") return null;
   const trimmed = text.trim();
   if (!trimmed) return null;
 
   const upper = trimmed.toUpperCase();
 
-  // 1. Trigger template kosong: "qc" atau "#QC"
+  // 1. Trigger template kosong: "qc" / "#QC" (Item 1) atau "qc2" / "qc 2" (Item lanjutan)
   if (/^(?:#?QC)$/i.test(trimmed)) {
     return { command: "QC_TEMPLATE" };
+  }
+  const itemTplMatch = trimmed.match(/^#?QC\s*(\d+)$/i);
+  if (itemTplMatch) {
+    return { command: "QC_ITEM_TEMPLATE", itemNumber: Math.max(2, parseInt(itemTplMatch[1], 10) || 2) };
   }
 
   // 2. Perintah bantu (#HELP, #KRITERIA, #PRODUK, #VENDOR, #STATUS)
@@ -145,14 +150,26 @@ export function parseQcMessage(text) {
     return { command: "VENDOR", sub: trimmed.slice(7).trim() };
   }
 
-  // 3. Cek pembuka FORM QC atau #QC dengan isi
+  // 3. Cek pembuka FORM QC / #QC dengan isi ATAU lanjutan [ITEM 2]+
   const lines = trimmed.split(/\r?\n/);
-  const firstLineUpper = lines[0].trim().toUpperCase();
+  const firstLineTrimmed = lines[0].trim();
+  const firstLineUpper = firstLineTrimmed.toUpperCase();
+  const continuationMatch = firstLineTrimmed.match(/^\[ITEM\s*(\d+)\]\s*$/i);
+  const isContinuation = Boolean(continuationMatch);
+  const continuationItemNumber = continuationMatch ? parseInt(continuationMatch[1], 10) : null;
   let startIdx = 0;
 
-  if (/^(?:FORM\s+QC|#QC)\b/.test(firstLineUpper)) {
+  if (isContinuation) {
+    if (!options.session || !options.session.vendor) {
+      return {
+        error: "Belum ada laporan *FORM QC* aktif sebelumnya untuk dilanjutkan. Ketik *qc* atau kirim *FORM QC* baru terlebih dahulu.",
+        needsActiveSession: true
+      };
+    }
+    startIdx = 1;
+  } else if (/^(?:FORM\s+QC|#QC)\b/.test(firstLineUpper)) {
     // Jika baris pertama hanya "FORM QC" atau "#QC"
-    const remainder = lines[0].trim().replace(/^(?:FORM\s+QC|#QC)\s*:?\s*/i, "");
+    const remainder = firstLineTrimmed.replace(/^(?:FORM\s+QC|#QC)\s*:?\s*/i, "");
     if (!remainder) {
       startIdx = 1;
     } else {
@@ -172,7 +189,14 @@ export function parseQcMessage(text) {
     }
   }
 
-  const headerData = {};
+  const headerData = isContinuation
+    ? {
+        vendor: options.session.vendor,
+        noDokumenPo: options.session.noDokumenPo,
+        tanggalPemeriksaan: options.session.tanggalPemeriksaan,
+        petugasQc: options.session.petugasQc
+      }
+    : {};
   const parsedItems = [];
   const corrections = [];
   let hasCorrection = false;
@@ -339,6 +363,19 @@ export function parseQcMessage(text) {
 
   if (!validation.valid) {
     return { error: validation.error, details: validation.details };
+  }
+
+  if (isContinuation) {
+    return {
+      type: "QC_ITEM_APPEND",
+      itemNumber: continuationItemNumber,
+      report: validation.report,
+      item: validation.report.items[0],
+      warnings: validation.warnings,
+      corrected: hasCorrection,
+      requires_confirmation: corrections.length > 0,
+      corrections
+    };
   }
 
   return {
