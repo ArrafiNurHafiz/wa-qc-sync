@@ -119,13 +119,13 @@
               <div>
                 <span class="card-tag">PROTOKOL LAPANGAN &middot; GAYA 4</span>
                 <h2 class="card-title">Template Input WhatsApp (<code>FORM QC</code>)</h2>
-                <p class="card-desc">Petugas cukup ketik <strong>qc</strong>, salin template kosong yang dikirim bot, lalu isi angka jumlah rusak pada baris cacat saja.</p>
+                <p class="card-desc">Petugas cukup ketik <strong>qc</strong> untuk template Item 1, isi angka jumlah rusak &amp; Keputusan, lalu kirim <strong>[ITEM 2]</strong> (atau ketik <strong>qc2</strong>) bila lanjut item berikutnya.</p>
               </div>
               <div class="protocol-actions">
                 <div class="proto-tab-pills" role="tablist" aria-label="Pilih contoh template">
                   <button type="button" class="proto-pill active" data-proto-mode="empty">Template Kosong</button>
                   <button type="button" class="proto-pill" data-proto-mode="example">Contoh Kerusakan</button>
-                  <button type="button" class="proto-pill" data-proto-mode="multi">Multi-Item (---)</button>
+                  <button type="button" class="proto-pill" data-proto-mode="multi">Lanjutan [ITEM 2]</button>
                 </div>
                 <button type="button" class="btn btn-primary" id="btnCopyTemplate">Salin Template</button>
               </div>
@@ -135,13 +135,13 @@
               <div class="pfs-left">
                 <span class="pfs-badge">TIPS LAPANGAN</span>
                 <div class="pfs-desc">
-                  <span class="pfs-lead">Baris kosong = aman (✓) &middot; Tanda "-" = tidak berlaku (–)</span>
-                  <span class="pfs-sub">Baris kriteria yang tidak bermasalah boleh dibiarkan kosong atau dihapus sebelum dikirim.</span>
+                  <span class="pfs-lead">Baris kosong = aman (0 rusak) &middot; Tanda "-" = tidak berlaku (–)</span>
+                  <span class="pfs-sub">Nama produk &amp; vendor bebas diketik langsung. Baris yang tidak bermasalah boleh dibiarkan kosong.</span>
                 </div>
               </div>
               <div class="pfs-actions">
                 <button type="button" class="btn btn-neutral" id="btnOpenHelp">Lihat #HELP</button>
-                <button type="button" class="btn btn-neutral" id="btnOpenCriteria">14 Kriteria (#KRITERIA)</button>
+                <button type="button" class="btn btn-neutral" id="btnOpenCriteria">15 Kriteria (#KRITERIA)</button>
               </div>
             </div>
 
@@ -152,11 +152,10 @@
             <div class="proto-command-hud">
               <span class="pch-label">PINTASAN WHATSAPP:</span>
               <div class="pch-items">
-                <button type="button" class="pch-chip" data-copy-cmd="qc"><span class="mono chip-cmd">qc</span><span class="chip-desc">Minta Template</span></button>
+                <button type="button" class="pch-chip" data-copy-cmd="qc"><span class="mono chip-cmd">qc</span><span class="chip-desc">Template Item 1</span></button>
+                <button type="button" class="pch-chip" data-copy-cmd="qc2"><span class="mono chip-cmd">qc2</span><span class="chip-desc">Lanjut [ITEM 2]</span></button>
                 <button type="button" class="pch-chip" data-copy-cmd="#HELP"><span class="mono chip-cmd">#HELP</span><span class="chip-desc">Panduan</span></button>
-                <button type="button" class="pch-chip" data-copy-cmd="#KRITERIA"><span class="mono chip-cmd">#KRITERIA</span><span class="chip-desc">14 Kriteria &amp; MC</span></button>
-                <button type="button" class="pch-chip" data-copy-cmd="#PRODUK"><span class="mono chip-cmd">#PRODUK</span><span class="chip-desc">66 SKU</span></button>
-                <button type="button" class="pch-chip" data-copy-cmd="#VENDOR"><span class="mono chip-cmd">#VENDOR</span><span class="chip-desc">Daftar Vendor</span></button>
+                <button type="button" class="pch-chip" data-copy-cmd="#KRITERIA"><span class="mono chip-cmd">#KRITERIA</span><span class="chip-desc">15 Kriteria &amp; MC</span></button>
                 <button type="button" class="pch-chip" data-copy-cmd="#STATUS"><span class="mono chip-cmd">#STATUS</span><span class="chip-desc">Cek GAS</span></button>
               </div>
             </div>
@@ -188,7 +187,7 @@
             <div class="form-grid-3">
               <div class="field-item">
                 <label class="field-label" for="qcVendor">NAMA VENDOR / LOKASI *</label>
-                <input type="text" id="qcVendor" class="field-input" list="vendorDatalist" placeholder="Pilih atau ketik vendor (cth: Londo)" required autocomplete="off">
+                <input type="text" id="qcVendor" class="field-input" list="vendorDatalist" placeholder="Ketik nama vendor bebas (cth: CV Sumber Kayu)" required autocomplete="off">
                 <datalist id="vendorDatalist"></datalist>
                 <span class="field-error hidden" id="errQcVendor"></span>
               </div>
@@ -250,12 +249,18 @@
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
               <input type="text" id="historySearch" placeholder="Cari vendor, PO, no laporan..." aria-label="Cari riwayat laporan QC">
             </div>
+            <div class="date-range-group">
+              <input type="date" id="historyDateFrom" class="field-input filter-date mono" aria-label="Dari tanggal" title="Dari tanggal">
+              <span class="field-hint">s.d.</span>
+              <input type="date" id="historyDateTo" class="field-input filter-date mono" aria-label="Sampai tanggal" title="Sampai tanggal">
+            </div>
             <select id="historyFilterDecision" class="field-input filter-select" aria-label="Filter keputusan">
               <option value="">Semua Keputusan</option>
               <option value="Lolos">Lolos</option>
               <option value="Bersyarat">Bersyarat</option>
               <option value="Tolak">Tolak</option>
             </select>
+            <button type="button" class="btn btn-neutral" id="btnResetHistoryFilter">Reset</button>
             <button type="button" class="btn btn-neutral" id="btnRefreshHistory">Refresh</button>
           </div>
         </div>

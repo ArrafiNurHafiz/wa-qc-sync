@@ -13,9 +13,11 @@ const state = {
 const EXAMPLES = {
   empty: () => state.help.templateText || "",
   example: () => `FORM QC
-Vendor   : Londo
+Vendor   : CV Sumber Kayu
 PO       : PO-2026-112
-Barang   : Sendok Oval
+
+[ITEM 1]
+Barang   : Meja Jati Custom
 Tahap    : Unfinish
 Periksa  : 1000
 MC %     : 13.5
@@ -23,25 +25,22 @@ MC %     : 13.5
 [Isi angka rusak, kosong = aman, "-" = T/B]
 Bluestain   : 30
 Cutter Mark : 20
+Crack       : 10
 Warna       : -
 
-Catatan  : 50 pcs disortir untuk rework vendor`,
-  multi: () => `FORM QC
-Vendor   : Londo
-PO       : PO-2026-112
-Barang   : Sendok Oval
-Tahap    : Unfinish
-Periksa  : 1000
-MC %     : 13.5
-Bluestain   : 30
-Cutter Mark : 20
-Catatan  : 50 pcs rework
----
-Barang   : Sutil Besar
+Catatan  : 60 pcs disortir untuk rework vendor
+Keputusan: Bersyarat`,
+  multi: () => `[ITEM 2]
+Barang   : Kursi Kayu Custom
 Tahap    : Unfinish
 Periksa  : 500
 MC %     : 14.0
-Catatan  : Mulus semua`
+
+[Isi angka rusak, kosong = aman, "-" = T/B]
+Crack       : 5
+
+Catatan  : 5 pcs retak ringan
+Keputusan: Bersyarat`
 };
 
 // --- Utilities ---
@@ -313,7 +312,7 @@ document.getElementById("btnOpenHelp")?.addEventListener("click", () => {
 });
 
 document.getElementById("btnOpenCriteria")?.addEventListener("click", () => {
-  document.getElementById("modalHelpTitle").textContent = "14 Kriteria QC & Batas MC (#KRITERIA)";
+  document.getElementById("modalHelpTitle").textContent = "15 Kriteria QC & Batas MC (#KRITERIA)";
   document.getElementById("helpGuideText").textContent = state.help.criteriaText || "Memuat...";
   openModal("modalHelp");
 });
@@ -430,7 +429,7 @@ function renderQcItems() {
               ${state.master.criteria.map((c) =>
                 `<option value="${escapeHtml(c.id)}" ${d.kriteriaId === c.id ? "selected" : ""}>${escapeHtml(c.shortLabel)} — ${escapeHtml(c.label)}</option>`
               ).join("")}
-              <option value="LAINNYA" ${d.kriteriaId === "LAINNYA" ? "selected" : ""}>Lainnya (di luar 14 kriteria)</option>
+              <option value="LAINNYA" ${d.kriteriaId === "LAINNYA" ? "selected" : ""}>Lainnya (di luar 15 kriteria)</option>
             </select>
             <input type="number" class="field-input mono defect-qty-input ${defectOverflow ? "is-error" : ""}" min="1" step="1" placeholder="Qty" value="${escapeHtml(d.qty)}" aria-label="Jumlah rusak">
             <input type="text" class="field-input defect-label-input ${d.kriteriaId === "LAINNYA" ? "" : "hidden"}" placeholder="Keterangan cacat lainnya..." value="${escapeHtml(d.label || "")}" aria-label="Detail cacat lainnya">
@@ -463,15 +462,15 @@ function renderQcItems() {
         <div class="item-card-header">
           <div>
             <span class="card-tag">ITEM PEMERIKSAAN #${idx + 1}</span>
-            <h3 class="card-title">${escapeHtml(item.namaItem || "Pilih Produk / SKU")}</h3>
+            <h3 class="card-title">${escapeHtml(item.namaItem || "Nama Produk / Barang")}</h3>
           </div>
           ${state.items.length > 1 ? `<button type="button" class="btn btn-destruct btn-sm btn-remove-item" data-item-idx="${idx}">Hapus Item</button>` : ""}
         </div>
 
         <div class="form-grid-4">
           <div class="field-item">
-            <label class="field-label" for="itemProd-${idx}">PRODUK / SKU *</label>
-            <input type="text" id="itemProd-${idx}" class="field-input item-product-input" list="productDatalist" value="${escapeHtml(item.productInput)}" placeholder="Cari nama atau RB..." required autocomplete="off">
+            <label class="field-label" for="itemProd-${idx}">NAMA PRODUK / BARANG *</label>
+            <input type="text" id="itemProd-${idx}" class="field-input item-product-input" list="productDatalist" value="${escapeHtml(item.productInput)}" placeholder="Ketik nama barang bebas (cth: Meja Jati)" required autocomplete="off">
           </div>
           <div class="field-item">
             <label class="field-label" for="itemTahap-${idx}">TAHAP BARANG</label>
@@ -504,7 +503,7 @@ function renderQcItems() {
 
         <div class="sub-block">
           <div class="sub-block-head">
-            <span class="field-label">3. CHECKLIST 14 KRITERIA DOK. QC-WOOD-01 (✓ OK / ✗ NOK / – T/B)</span>
+            <span class="field-label">3. STATUS 15 KRITERIA DOK. QC-WOOD-01 (✓ Aman / ✗ Rusak / – T/B)</span>
           </div>
           <div class="criteria-grid">${criteriaGridHtml}</div>
         </div>
@@ -623,7 +622,7 @@ itemsContainer?.addEventListener("input", (e) => {
     item.kodeRawBody = resolved.kodeRawBody;
     item.namaItem = resolved.namaItem;
     const h3 = card.querySelector(".item-card-header .card-title");
-    if (h3) h3.textContent = item.namaItem || "Pilih Produk / SKU";
+    if (h3) h3.textContent = item.namaItem || "Nama Produk / Barang";
   } else if (e.target.classList.contains("item-qty-input")) {
     item.qtyDiperiksa = e.target.value;
     updateItemLiveDisplay(idx);
@@ -887,20 +886,59 @@ function decisionPillClass(decision) {
   return "warn";
 }
 
+function toComparableIsoDate(rawDate) {
+  const formatted = formatDisplayDate(rawDate);
+  const m = formatted.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return "";
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+
 function renderReportsTable() {
   const tbody = document.getElementById("historyTableBody");
   if (!tbody) return;
 
   const q = String(document.getElementById("historySearch")?.value || "").trim().toLowerCase();
   const decFilter = document.getElementById("historyFilterDecision")?.value || "";
+  const fromDate = document.getElementById("historyDateFrom")?.value || "";
+  const toDate = document.getElementById("historyDateTo")?.value || "";
 
   const filtered = state.reports.filter((r) => {
     if (decFilter && r.keputusanUmum !== decFilter) return false;
+    if (fromDate || toDate) {
+      const iso = toComparableIsoDate(r.tanggal);
+      if (!iso) return false;
+      if (fromDate && iso < fromDate) return false;
+      if (toDate && iso > toDate) return false;
+    }
     if (!q) return true;
     return [r.noLaporan, r.vendor, r.noDokumenPo, r.petugasQc].some((v) =>
       String(v || "").toLowerCase().includes(q)
     );
   });
+
+  if (q || decFilter || fromDate || toDate) {
+    let totalInspected = 0;
+    let totalDefect = 0;
+    let totalPassed = 0;
+    let activeReports = 0;
+    for (const r of filtered) {
+      if (r.status === "VOID") continue;
+      activeReports++;
+      totalInspected += Number(r.totalDiperiksa) || 0;
+      totalDefect += Number(r.totalRusak) || 0;
+      totalPassed += Number(r.totalLolos) || 0;
+    }
+    const passRate = totalInspected > 0 ? Math.round((totalPassed / totalInspected) * 1000) / 10 : 100;
+    updateSummaryMetrics({
+      totalReports: filtered.length,
+      activeReports,
+      totalInspected,
+      totalDefect,
+      passRate
+    });
+  } else if (state.summary) {
+    updateSummaryMetrics(state.summary);
+  }
 
   if (filtered.length === 0) {
     tbody.innerHTML = `<tr><td colspan="11" class="empty-state">Belum ada laporan QC yang cocok.</td></tr>`;
@@ -972,7 +1010,20 @@ async function loadReports(fresh = false) {
 }
 
 document.getElementById("historySearch")?.addEventListener("input", renderReportsTable);
+document.getElementById("historyDateFrom")?.addEventListener("change", renderReportsTable);
+document.getElementById("historyDateTo")?.addEventListener("change", renderReportsTable);
 document.getElementById("historyFilterDecision")?.addEventListener("change", renderReportsTable);
+document.getElementById("btnResetHistoryFilter")?.addEventListener("click", () => {
+  const searchEl = document.getElementById("historySearch");
+  const fromEl = document.getElementById("historyDateFrom");
+  const toEl = document.getElementById("historyDateTo");
+  const decEl = document.getElementById("historyFilterDecision");
+  if (searchEl) searchEl.value = "";
+  if (fromEl) fromEl.value = "";
+  if (toEl) toEl.value = "";
+  if (decEl) decEl.value = "";
+  renderReportsTable();
+});
 document.getElementById("btnRefreshHistory")?.addEventListener("click", () => loadReports(true));
 
 document.getElementById("historyTableBody")?.addEventListener("click", async (e) => {
