@@ -63,6 +63,14 @@ function createMockGasEnv({ apiSecret = "", generatePdf = "true" } = {}) {
       }
       return this;
     }
+    clearContent() {
+      for (let i = 0; i < this.nr; i++) {
+        for (let j = 0; j < this.nc; j++) {
+          this.sheet._setCell(this.r + i, this.c + j, "");
+        }
+      }
+      return this;
+    }
     setFontWeight() { return this; }
     setBackground() { return this; }
     setWrap() { return this; }
@@ -637,4 +645,168 @@ test("gas/Code_QC.gs mengubah A22 ke TOLERANSI & PRESISI KONSTRUKSI, menyisipkan
   assert.equal(tab1.getRange("E35").getValue(), 190);
   assert.equal(kRow[5], 2); // Total Item = 2
   assert.equal(kRow[22], 25); // Crack akumulasi = 15 + 10
+});
+
+test("gas/Code_QC.gs default GENERATE_PDF=false hanya menyimpan Google Sheet tanpa PDF", () => {
+  const env = createMockGasEnv({ generatePdf: "" });
+  const res = JSON.parse(env.sandbox.doPost({
+    postData: {
+      contents: JSON.stringify({
+        action: "LOG_QC_REPORT",
+        data: {
+          noLaporan: "QC-20261127-SHEET-ONLY",
+          idempotencyKey: "sheet:only:1",
+          vendor: "CV Kayu",
+          noDokumenPo: "PO-SO-1",
+          tanggalPemeriksaan: "27/11/2026",
+          petugasQc: "Budi",
+          items: [
+            {
+              kodeRawBody: "",
+              namaItem: "Kursi",
+              tahapBarang: "Unfinish",
+              qtyDiperiksa: 100,
+              rusak: [],
+              totalRusak: 0,
+              qtyLolos: 100,
+              kriteriaStatus: {},
+              keputusan: "Lolos",
+              catatanSingkat: "Aman"
+            }
+          ]
+        }
+      })
+    }
+  }).getContent());
+
+  assert.equal(res.status, "success");
+  assert.ok(res.sheetUrl);
+  assert.equal(res.pdfUrl, "");
+  assert.equal(env.getCopyCount(), 1);
+  assert.equal(env.getPdfCount(), 0);
+});
+
+test("gas/Code_QC.gs membuat dan menyinkronkan sheet DASHBOARD, ROWBODY, dan FINISHING termasuk saat APPEND dan VOID", () => {
+  const env = createMockGasEnv({ generatePdf: "false" });
+  const setupRes = env.sandbox.setupQcTemplate();
+  assert.equal(setupRes.status, "success");
+
+  const rekapSs = env.spreadsheets.get("rekap-ss-1");
+  const dashSheet = rekapSs.getSheetByName("DASHBOARD");
+  const rowbodySheet = rekapSs.getSheetByName("ROWBODY");
+  const finishingSheet = rekapSs.getSheetByName("FINISHING");
+  assert.ok(dashSheet);
+  assert.ok(rowbodySheet);
+  assert.ok(finishingSheet);
+  assert.equal(rowbodySheet.rows[0][7], "Total Rusak Rowbody");
+  assert.equal(rowbodySheet.rows[0][19], "Crack");
+  assert.equal(finishingSheet.rows[0][7], "Total Rusak Finishing");
+  assert.equal(finishingSheet.rows[0][8], "Warna");
+  assert.equal(finishingSheet.rows[0][10], "Lubang");
+
+  // Submit laporan dengan kerusakan Rowbody (Crack: 12, Bluestain: 5) dan Finishing (Warna: 3)
+  const logRes = JSON.parse(env.sandbox.doPost({
+    postData: {
+      contents: JSON.stringify({
+        action: "LOG_QC_REPORT",
+        data: {
+          noLaporan: "QC-20261127-STAGE-1",
+          idempotencyKey: "stage:1",
+          vendor: "CV Kayu Jaya",
+          noDokumenPo: "PO-STG-1",
+          tanggalPemeriksaan: "27/11/2026",
+          petugasQc: "Rafi",
+          keputusanUmum: "Bersyarat",
+          items: [
+            {
+              kodeRawBody: "",
+              namaItem: "Meja Kayu",
+              tahapBarang: "Unfinish",
+              qtyDiperiksa: 100,
+              rusak: [
+                { kriteriaId: "BLUESTAIN", label: "Bebas Bluestain / Jamur", qty: 5 },
+                { kriteriaId: "CRACK", label: "Crack / Pecah", qty: 12 },
+                { kriteriaId: "WARNA", label: "Warna Sesuai Color Card", qty: 3 }
+              ],
+              totalRusak: 20,
+              qtyLolos: 80,
+              kriteriaStatus: { BLUESTAIN: "NOK", CRACK: "NOK", WARNA: "NOK" },
+              keputusan: "Bersyarat",
+              catatanSingkat: "Rusak 20"
+            }
+          ]
+        }
+      })
+    }
+  }).getContent());
+  assert.equal(logRes.status, "success");
+
+  // Verifikasi ROWBODY (baris 2)
+  assert.equal(rowbodySheet.rows[1][2], "CV Kayu Jaya");
+  assert.equal(rowbodySheet.rows[1][7], 17); // 5 + 12
+  assert.equal(rowbodySheet.rows[1][12], 5); // Bluestain
+  assert.equal(rowbodySheet.rows[1][19], 12); // Crack
+
+  // Verifikasi FINISHING (baris 2)
+  assert.equal(finishingSheet.rows[1][2], "CV Kayu Jaya");
+  assert.equal(finishingSheet.rows[1][7], 3); // Warna 3
+  assert.equal(finishingSheet.rows[1][8], 3); // Warna
+  assert.equal(finishingSheet.rows[1][9], 0); // Kehalusan
+
+  // Verifikasi DASHBOARD (baris 2)
+  assert.equal(dashSheet.rows[1][0], "CV Kayu Jaya");
+  assert.equal(dashSheet.rows[1][1], 1); // Total Kunjungan
+  assert.equal(dashSheet.rows[1][2], 100); // Total Diperiksa
+  assert.equal(dashSheet.rows[1][3], 20); // Total Rusak
+  assert.equal(dashSheet.rows[1][4], 80); // Total Lolos
+  assert.equal(dashSheet.rows[1][10], 5); // Bluestain (col 6 + index 4)
+  assert.equal(dashSheet.rows[1][17], 12); // Crack (col 6 + index 11)
+  assert.equal(dashSheet.rows[1][18], 3); // Warna (col 6 + index 12)
+
+  // Append item ke-2 -> cek ROWBODY, FINISHING, dan DASHBOARD ikut terupdate
+  const appendRes = JSON.parse(env.sandbox.doPost({
+    postData: {
+      contents: JSON.stringify({
+        action: "APPEND_QC_ITEM",
+        data: {
+          noLaporan: "QC-20261127-STAGE-1",
+          vendor: "CV Kayu Jaya",
+          noDokumenPo: "PO-STG-1",
+          tanggalPemeriksaan: "27/11/2026",
+          petugasQc: "Rafi",
+          item: {
+            kodeRawBody: "",
+            namaItem: "Kursi Kayu",
+            tahapBarang: "Finishing",
+            qtyDiperiksa: 50,
+            rusak: [{ kriteriaId: "KEHALUSAN", label: "Kehalusan Permukaan", qty: 4 }],
+            totalRusak: 4,
+            qtyLolos: 46,
+            kriteriaStatus: { KEHALUSAN: "NOK" },
+            keputusan: "Bersyarat",
+            catatanSingkat: "Rusak 4"
+          }
+        }
+      })
+    }
+  }).getContent());
+  assert.equal(appendRes.status, "success");
+  assert.equal(rowbodySheet.rows.length, 3);
+  assert.equal(finishingSheet.rows.length, 3);
+  assert.equal(finishingSheet.rows[2][7], 4);
+  assert.equal(dashSheet.rows[1][2], 150); // Total Diperiksa 100 + 50
+  assert.equal(dashSheet.rows[1][3], 24); // Total Rusak 20 + 4
+  assert.equal(dashSheet.rows[1][19], 4); // Kehalusan (col 6 + index 13)
+
+  // VOID laporan -> DASHBOARD otomatis mengosongkan vendor yang seluruh laporannya di-VOID
+  const voidRes = JSON.parse(env.sandbox.doPost({
+    postData: {
+      contents: JSON.stringify({
+        action: "VOID_QC_REPORT",
+        data: { noLaporan: "QC-20261127-STAGE-1", alasanVoid: "Salah input", oleh: "Admin" }
+      })
+    }
+  }).getContent());
+  assert.equal(voidRes.status, "success");
+  assert.equal(dashSheet.rows[1][0], "");
 });

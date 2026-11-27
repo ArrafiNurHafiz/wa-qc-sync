@@ -8,8 +8,32 @@ var SHEET_NAMES = {
   KUNJUNGAN: "REKAP_QC_KUNJUNGAN",
   DETAIL: "REKAP_QC_DETAIL_ITEM",
   KERUSAKAN: "LOG_KERUSAKAN",
+  DASHBOARD: "DASHBOARD",
+  ROWBODY: "ROWBODY",
+  FINISHING: "FINISHING",
   META: "_LOG_META"
 };
+
+var ROWBODY_DEFECT_COLUMNS = [
+  { id: "ATI", label: "Ati" },
+  { id: "PULUR", label: "Pulur" },
+  { id: "TETER", label: "Teter" },
+  { id: "MATA_MATI", label: "Mata Mati" },
+  { id: "BLUESTAIN", label: "Bluestain" },
+  { id: "CUTTER_MARK", label: "Cutter Mark" },
+  { id: "BEKAS_GERINDA", label: "Gerinda" },
+  { id: "SERAT_BALIK", label: "Serat Balik" },
+  { id: "TOLERANSI_UKURAN", label: "Ukuran" },
+  { id: "KESIKUAN", label: "Kesikuan" },
+  { id: "DORENG", label: "Doreng" },
+  { id: "CRACK", label: "Crack" }
+];
+
+var FINISHING_DEFECT_COLUMNS = [
+  { id: "WARNA", label: "Warna" },
+  { id: "KEHALUSAN", label: "Kehalusan" },
+  { id: "BEBAS_LUBANG", label: "Lubang" }
+];
 
 var DEFECT_REKAP_COLUMNS = [
   { id: "ATI", label: "Ati" },
@@ -63,7 +87,7 @@ function getProps() {
     templateFileId: (p.getProperty("TEMPLATE_FILE_ID") || "").trim(),
     outputFolderId: (p.getProperty("OUTPUT_FOLDER_ID") || "").trim(),
     rekapSpreadsheetId: (p.getProperty("REKAP_SPREADSHEET_ID") || "").trim(),
-    generatePdf: (p.getProperty("GENERATE_PDF") || "true").trim().toLowerCase() !== "false",
+    generatePdf: (p.getProperty("GENERATE_PDF") || "false").trim().toLowerCase() === "true",
     apiSecret: (p.getProperty("API_SECRET") || "").trim()
   };
 }
@@ -170,10 +194,50 @@ function ensureRekapSheets(ss) {
     kunjunganHeaders.push(DEFECT_REKAP_COLUMNS[k].label);
   }
 
+  var dashboardHeaders = [
+    "Vendor", "Total Kunjungan", "Total Diperiksa", "Total Rusak", "Total Lolos", "Pass Rate (%)"
+  ];
+  for (var d = 0; d < DEFECT_REKAP_COLUMNS.length; d++) {
+    dashboardHeaders.push(DEFECT_REKAP_COLUMNS[d].label);
+  }
+
+  var rowbodyHeaders = [
+    "Tanggal", "No Laporan", "Vendor", "No PO", "Nama Item", "Tahap",
+    "Diperiksa", "Total Rusak Rowbody"
+  ];
+  for (var rCol = 0; rCol < ROWBODY_DEFECT_COLUMNS.length; rCol++) {
+    rowbodyHeaders.push(ROWBODY_DEFECT_COLUMNS[rCol].label);
+  }
+  rowbodyHeaders.push("Keputusan", "Petugas QC");
+
+  var finishingHeaders = [
+    "Tanggal", "No Laporan", "Vendor", "No PO", "Nama Item", "Tahap",
+    "Diperiksa", "Total Rusak Finishing"
+  ];
+  for (var fCol = 0; fCol < FINISHING_DEFECT_COLUMNS.length; fCol++) {
+    finishingHeaders.push(FINISHING_DEFECT_COLUMNS[fCol].label);
+  }
+  finishingHeaders.push("Keputusan", "Petugas QC");
+
   var defs = [
+    {
+      name: SHEET_NAMES.DASHBOARD,
+      headers: dashboardHeaders,
+      hidden: false
+    },
     {
       name: SHEET_NAMES.KUNJUNGAN,
       headers: kunjunganHeaders,
+      hidden: false
+    },
+    {
+      name: SHEET_NAMES.ROWBODY,
+      headers: rowbodyHeaders,
+      hidden: false
+    },
+    {
+      name: SHEET_NAMES.FINISHING,
+      headers: finishingHeaders,
       hidden: false
     },
     {
@@ -224,6 +288,147 @@ function ensureRekapSheets(ss) {
       sheet.hideSheet();
     }
   }
+}
+
+function buildStageLogRow(data, item, noLaporan, columns) {
+  var defectList = Array.isArray(item.rusak) ? item.rusak : [];
+  var defectMap = {};
+  for (var i = 0; i < defectList.length; i++) {
+    var d = defectList[i];
+    var qty = Number(d.qty) || 0;
+    if (qty > 0) {
+      var kId = String(d.kriteriaId || "").toUpperCase();
+      defectMap[kId] = (defectMap[kId] || 0) + qty;
+    }
+  }
+
+  var stageTotal = 0;
+  var counts = [];
+  for (var c = 0; c < columns.length; c++) {
+    var val = defectMap[columns[c].id] || 0;
+    stageTotal += val;
+    counts.push(val);
+  }
+
+  var row = [
+    data.tanggalPemeriksaan || "",
+    noLaporan,
+    data.vendor || "",
+    data.noDokumenPo || "-",
+    item.namaItem || "",
+    item.tahapBarang || "Unfinish",
+    Number(item.qtyDiperiksa) || 0,
+    stageTotal
+  ];
+  for (var idx = 0; idx < counts.length; idx++) {
+    row.push(counts[idx]);
+  }
+  row.push(item.keputusan || "Lolos", data.petugasQc || "-");
+  return row;
+}
+
+function appendStageLogs(rekapSs, data, item, noLaporan) {
+  var lap = noLaporan || data.noLaporan || "";
+  var rowbodySheet = rekapSs.getSheetByName(SHEET_NAMES.ROWBODY);
+  if (rowbodySheet) {
+    rowbodySheet.appendRow(buildStageLogRow(data, item, lap, ROWBODY_DEFECT_COLUMNS));
+  }
+  var finishingSheet = rekapSs.getSheetByName(SHEET_NAMES.FINISHING);
+  if (finishingSheet) {
+    finishingSheet.appendRow(buildStageLogRow(data, item, lap, FINISHING_DEFECT_COLUMNS));
+  }
+}
+
+function refreshDashboardSheet(rekapSs) {
+  var dashSheet = rekapSs.getSheetByName(SHEET_NAMES.DASHBOARD);
+  var kSheet = rekapSs.getSheetByName(SHEET_NAMES.KUNJUNGAN);
+  var mSheet = rekapSs.getSheetByName(SHEET_NAMES.META);
+  if (!dashSheet || !kSheet) return;
+
+  var voidSet = {};
+  if (mSheet && mSheet.getLastRow() >= 2) {
+    var mRows = mSheet.getRange(2, 1, mSheet.getLastRow() - 1, 3).getValues();
+    for (var m = 0; m < mRows.length; m++) {
+      var mNo = String(mRows[m][0] || "").trim();
+      var mStatus = String(mRows[m][2] || "ACTIVE").toUpperCase();
+      if (mNo && mStatus === "VOID") {
+        voidSet[mNo] = true;
+      }
+    }
+  }
+
+  var vendorMap = {};
+  var vendorOrder = [];
+  var totalKCols = 11 + DEFECT_REKAP_COLUMNS.length;
+  if (kSheet.getLastRow() >= 2) {
+    var kRows = kSheet.getRange(2, 1, kSheet.getLastRow() - 1, totalKCols).getValues();
+    for (var i = 0; i < kRows.length; i++) {
+      var kr = kRows[i];
+      var noLap = String(kr[1] || "").trim();
+      if (!noLap || voidSet[noLap]) continue;
+
+      var vendorName = String(kr[3] || "").trim() || "-";
+      var key = vendorName.toLowerCase();
+      if (!vendorMap[key]) {
+        var emptyDefects = [];
+        for (var c = 0; c < DEFECT_REKAP_COLUMNS.length; c++) emptyDefects.push(0);
+        vendorMap[key] = {
+          vendor: vendorName,
+          kunjungan: 0,
+          diperiksa: 0,
+          rusak: 0,
+          lolos: 0,
+          defects: emptyDefects
+        };
+        vendorOrder.push(key);
+      }
+
+      var agg = vendorMap[key];
+      agg.kunjungan += 1;
+      agg.diperiksa += Number(kr[6]) || 0;
+      agg.rusak += Number(kr[7]) || 0;
+      agg.lolos += Number(kr[8]) || 0;
+      for (var d = 0; d < DEFECT_REKAP_COLUMNS.length; d++) {
+        agg.defects[d] += Number(kr[11 + d]) || 0;
+      }
+    }
+  }
+
+  var totalDashCols = 6 + DEFECT_REKAP_COLUMNS.length;
+  var existingLastRow = dashSheet.getLastRow();
+  if (existingLastRow >= 2) {
+    dashSheet.getRange(2, 1, existingLastRow - 1, totalDashCols).clearContent();
+  }
+
+  if (vendorOrder.length === 0) return;
+
+  vendorOrder.sort(function (a, b) {
+    var diff = vendorMap[b].rusak - vendorMap[a].rusak;
+    if (diff !== 0) return diff;
+    return vendorMap[a].vendor.localeCompare(vendorMap[b].vendor);
+  });
+
+  var outRows = [];
+  for (var v = 0; v < vendorOrder.length; v++) {
+    var entry = vendorMap[vendorOrder[v]];
+    var passRate = entry.diperiksa > 0
+      ? Math.round((entry.lolos / entry.diperiksa) * 1000) / 10
+      : 100;
+    var row = [
+      entry.vendor,
+      entry.kunjungan,
+      entry.diperiksa,
+      entry.rusak,
+      entry.lolos,
+      passRate
+    ];
+    for (var dc = 0; dc < DEFECT_REKAP_COLUMNS.length; dc++) {
+      row.push(entry.defects[dc]);
+    }
+    outRows.push(row);
+  }
+
+  dashSheet.getRange(2, 1, outRows.length, totalDashCols).setValues(outRows);
 }
 
 function resolveFormLayout(sheet) {
@@ -339,6 +544,7 @@ function setupQcTemplate() {
     throw new Error("Rekap Spreadsheet tidak ditemukan.");
   }
   ensureRekapSheets(rekapSs);
+  refreshDashboardSheet(rekapSs);
 
   var templateNormalized = false;
   if (cfg.templateFileId) {
@@ -599,6 +805,7 @@ function handleLogQcReport(data, cfg) {
       it.keputusan || "Lolos",
       it.catatanSingkat || ""
     ]);
+    appendStageLogs(rekapSs, data, it, data.noLaporan);
 
     for (var dIdx = 0; dIdx < defectList.length; dIdx++) {
       var defect = defectList[dIdx];
@@ -651,6 +858,8 @@ function handleLogQcReport(data, cfg) {
       ""
     ]);
   }
+
+  refreshDashboardSheet(rekapSs);
 
   return jsonResponse({
     status: "success",
@@ -836,6 +1045,9 @@ function handleAppendQcItem(data, cfg) {
       kSheet.getRange(kRowIdx, 12 + colIdx).setValue(nextVal);
     }
   }
+
+  appendStageLogs(rekapSs, data, item, noLaporan);
+  refreshDashboardSheet(rekapSs);
 
   return jsonResponse({
     status: "success",
@@ -1059,6 +1271,8 @@ function handleVoidQcReport(data, cfg) {
           Logger.log("Gagal rename file PDF Drive: " + renamePdfErr.toString());
         }
       }
+
+      refreshDashboardSheet(rekapSs);
 
       return jsonResponse({
         status: "success",
