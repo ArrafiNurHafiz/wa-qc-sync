@@ -32,7 +32,7 @@ Menghubungkan aplikasi `wa-qc-sync` (Node.js) dengan **Google Drive** dan **Goog
    | `TEMPLATE_FILE_ID` | Wajib | ID Google Sheet Master Template `Form QC Lap` |
    | `OUTPUT_FOLDER_ID` | Wajib | ID Folder Google Drive tempat menyimpan hasil salinan form & PDF |
    | `REKAP_SPREADSHEET_ID` | Opsional | ID Spreadsheet Rekap Pusat (default: spreadsheet tempat script terpasang) |
-   | `GENERATE_PDF` | Opsional | `"true"` (default: buat salinan PDF selain Google Sheet) atau `"false"` |
+   | `GENERATE_PDF` | Opsional | `"false"` (default: simpan file Google Sheet saja) atau `"true"` |
    | `API_SECRET` | Opsional | Token rahasia opsional yang dicocokkan dengan `.env` Node.js |
 
 ### Langkah 4 — Jalankan `setupQcTemplate()` Satu Kali
