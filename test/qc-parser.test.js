@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseQcMessage } from "../src/qc/qc-parser.js";
+import { PRODUCT_MASTER, VENDORS_PRE, addProduct, addVendor } from "../src/qc/dictionary.js";
 import { getQcTemplateText, getQcItemTemplateText, getHelpText, getCriteriaText } from "../src/qc/help-text.js";
 
 test("perintah qc / #QC kosong, qc2, dan perintah bantu mengembalikan command yang benar", () => {
@@ -66,7 +67,7 @@ Catatan  : 50 pcs disortir untuk rework vendor`;
   assert.equal(parsed.report.items.length, 1);
 
   const item = parsed.report.items[0];
-  assert.equal(item.kodeRawBody, "");
+  assert.equal(item.kodeRawBody, "RB103002");
   assert.equal(item.namaItem, "Sendok Oval");
   assert.equal(item.qtyDiperiksa, 1000);
   assert.equal(item.mcMentah, 13.5);
@@ -101,22 +102,22 @@ Catatan  : Mulus semua`;
   assert.equal(parsed.error, undefined);
   assert.equal(parsed.report.items.length, 2);
   assert.equal(parsed.report.items[0].qtyLolos, 950);
-  assert.equal(parsed.report.items[1].kodeRawBody, "");
+  assert.equal(parsed.report.items[1].kodeRawBody, "RB102003");
   assert.equal(parsed.report.items[1].namaItem, "Sutil Besar");
   assert.equal(parsed.report.items[1].qtyLolos, 500);
   assert.equal(parsed.report.items[1].keputusan, "Lolos");
 });
 
-test("parseQcMessage menerima teks custom bebas dan menolak field wajib kosong/rusak non-angka", () => {
-  const customFree = parseQcMessage(`FORM QC
+test("parseQcMessage mendeteksi typo sedang (#OK) dan menolak field wajib kosong/rusak non-angka", () => {
+  const typoMedium = parseQcMessage(`FORM QC
 Vendor   : Widodo Kltn
 Barang   : Sutil Bsr
 Periksa  : 200`);
-  assert.equal(customFree.error, undefined);
-  assert.equal(customFree.requires_confirmation, false);
-  assert.equal(customFree.report.vendor, "Widodo Kltn");
-  assert.equal(customFree.report.items[0].kodeRawBody, "");
-  assert.equal(customFree.report.items[0].namaItem, "Sutil Bsr");
+  assert.equal(typoMedium.error, undefined);
+  assert.equal(typoMedium.requires_confirmation, true);
+  assert.equal(typoMedium.report.vendor, "Widodo Klaten");
+  assert.equal(typoMedium.report.items[0].kodeRawBody, "RB102003");
+  assert.equal(typoMedium.report.items[0].namaItem, "Sutil Besar");
 
   const missingField = parseQcMessage(`FORM QC
 Vendor   : Londo
@@ -156,13 +157,13 @@ test("parseQcMessage template 1 item dan lanjutan [ITEM 2] berurutan", () => {
   assert.equal(res1.error, undefined);
   assert.equal(res1.type, "QC_REPORT");
   assert.equal(res1.report.items.length, 1);
-  assert.equal(res1.report.items[0].kodeRawBody, "");
+  assert.equal(res1.report.items[0].kodeRawBody, "RB103002");
   assert.equal(res1.report.items[0].namaItem, "Sendok Oval");
   assert.equal(res1.report.items[0].qtyLolos, 100);
   assert.equal(res1.report.items[0].keputusan, "Tolak");
 
   const tpl2 = getQcItemTemplateText(2)
-    .replace("Barang   : \nTahap    : Unfinish\nPeriksa  : \nMC %     : ", "Barang   : Kursi Baru\nTahap    : Unfinish\nPeriksa  : 50\nMC %     : 12.0")
+    .replace("Barang   : \nTahap    : Unfinish\nPeriksa  : \nMC %     : ", "Barang   : Talenan Jepang\nTahap    : Unfinish\nPeriksa  : 50\nMC %     : 12.0")
     .replace("Crack       : ", "Crack       : 5")
     .replace("\nKeputusan: ", "\nKeputusan: Bersyarat");
 
@@ -179,13 +180,14 @@ test("parseQcMessage template 1 item dan lanjutan [ITEM 2] berurutan", () => {
   assert.equal(res2.type, "QC_ITEM_APPEND");
   assert.equal(res2.itemNumber, 2);
   assert.equal(res2.report.vendor, "Londo");
-  assert.equal(res2.item.namaItem, "Kursi Baru");
+  assert.equal(res2.item.kodeRawBody, "RB201004");
+  assert.equal(res2.item.namaItem, "Talenan Jepang");
   assert.equal(res2.item.qtyLolos, 45);
   assert.equal(res2.item.rusak[0].kriteriaId, "CRACK");
   assert.equal(res2.item.keputusan, "Bersyarat");
 });
 
-test("parseQcMessage menerima produk dan vendor custom bebas di luar kamus lokal", () => {
+test("parseQcMessage menolak produk dan vendor tidak terdaftar di database", () => {
   const parsed = parseQcMessage(`FORM QC
 Vendor   : CV Sumber Kayu Mandiri
 PO       : PO-CUSTOM-01
@@ -196,11 +198,50 @@ MC %     : 12.5
 Bluestain: 10
 Keputusan: Bersyarat`);
 
-  assert.equal(parsed.error, undefined);
-  assert.equal(parsed.requires_confirmation, false);
-  assert.equal(parsed.report.vendor, "CV Sumber Kayu Mandiri");
-  assert.equal(parsed.report.items[0].kodeRawBody, "");
-  assert.equal(parsed.report.items[0].namaItem, "Talang Bambu Custom 40cm");
-  assert.equal(parsed.report.items[0].qtyLolos, 110);
-  assert.equal(parsed.report.items[0].keputusan, "Bersyarat");
+  assert.match(parsed.error, /tidak ditemukan di database/i);
+});
+
+test("parseQcMessage memvalidasi terhadap database & auto-correct typo saat master terisi", () => {
+  // Typo ringan (score >= 0.90) -> auto-correct langsung tanpa #OK
+  const minorTypo = parseQcMessage(`FORM QC
+Vendor   : Widodo Klatn
+PO       : PO-DB-01
+Barang   : Sendok Oval Duc
+Tahap    : Unfinish
+Periksa  : 100
+MC %     : 12
+Keputusan: Lolos`);
+
+  assert.equal(minorTypo.error, undefined);
+  assert.equal(minorTypo.requires_confirmation, false);
+  assert.equal(minorTypo.corrected, true);
+  assert.equal(minorTypo.report.vendor, "Widodo Klaten");
+  assert.equal(minorTypo.report.items[0].kodeRawBody, "RB103017");
+  assert.equal(minorTypo.report.items[0].namaItem, "Sendok Oval Duco");
+
+  // Typo sedang (0.50 - 0.89) -> requires_confirmation (#OK)
+  const moderateTypo = parseQcMessage(`FORM QC
+Vendor   : Widodo Kltn
+PO       : PO-DB-02
+Barang   : Sendok Oval
+Tahap    : Unfinish
+Periksa  : 50
+MC %     : 12
+Keputusan: Lolos`);
+
+  assert.equal(moderateTypo.error, undefined);
+  assert.equal(moderateTypo.requires_confirmation, true);
+  assert.equal(moderateTypo.report.vendor, "Widodo Klaten");
+
+  // Produk tidak ada di database -> ditolak
+  const unknownProd = parseQcMessage(`FORM QC
+Vendor   : Londo
+PO       : PO-DB-03
+Barang   : Kursi Plastik Xyz
+Tahap    : Unfinish
+Periksa  : 50
+MC %     : 12
+Keputusan: Lolos`);
+
+  assert.match(unknownProd.error, /tidak ditemukan di database/i);
 });

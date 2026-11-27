@@ -1,5 +1,6 @@
 // src/qc/qc-validator.js — Validasi domain QC Lapangan KWaS (FR-004)
-import { QC_CRITERIA, MC_LIMITS, QC_DECISIONS } from "./dictionary.js";
+import { QC_CRITERIA, MC_LIMITS, QC_DECISIONS, PRODUCT_MASTER, VENDORS_PRE, VENDORS_FIN } from "./dictionary.js";
+import { matchProduct, matchVendorWithConfidence } from "./matcher.js";
 
 const VALID_CRITERIA_IDS = new Set(QC_CRITERIA.map((c) => c.id));
 const CRITERIA_BY_ID = new Map(QC_CRITERIA.map((c) => [c.id, c]));
@@ -61,9 +62,19 @@ export function validateQcReport(input) {
     return { valid: false, error: "Payload laporan QC tidak valid.", details: ["Payload harus berupa objek."] };
   }
 
-  const vendor = String(input.vendor || "").trim();
+  let vendor = String(input.vendor || "").trim();
   if (!vendor) {
     errors.push("Nama vendor wajib diisi.");
+  } else if (VENDORS_PRE.length > 0 || VENDORS_FIN.length > 0) {
+    const vMatch = matchVendorWithConfidence(vendor);
+    if (!vMatch) {
+      errors.push(`Vendor "${vendor}" tidak ditemukan di database. Tambahkan di Pengaturan → Master Data terlebih dahulu.`);
+    } else {
+      if (vMatch.corrected && vMatch.vendor !== vendor) {
+        warnings.push(`Vendor dikoreksi otomatis: "${vendor}" → "${vMatch.vendor}".`);
+      }
+      vendor = vMatch.vendor;
+    }
   }
 
   if (!Array.isArray(input.items) || input.items.length === 0) {
@@ -87,10 +98,21 @@ export function validateQcReport(input) {
     const labelIdx = `Item #${idx + 1}`;
     const itemErrors = [];
 
-    const namaItem = String(rawItem?.namaItem || rawItem?.nama || "").trim();
-    const kodeRawBody = String(rawItem?.kodeRawBody || rawItem?.sku || "").trim().toUpperCase();
+    let namaItem = String(rawItem?.namaItem || rawItem?.nama || "").trim();
+    let kodeRawBody = String(rawItem?.kodeRawBody || rawItem?.sku || "").trim().toUpperCase();
     if (!namaItem && !kodeRawBody) {
       itemErrors.push(`${labelIdx}: Kode atau nama item wajib diisi.`);
+    } else if (PRODUCT_MASTER.length > 0) {
+      const pMatch = matchProduct(kodeRawBody || namaItem) || matchProduct(namaItem || kodeRawBody);
+      if (!pMatch) {
+        itemErrors.push(`${labelIdx}: Produk "${namaItem || kodeRawBody}" tidak ditemukan di database. Tambahkan di Pengaturan → Master Data terlebih dahulu.`);
+      } else {
+        if (pMatch.corrected && namaItem && pMatch.product.nama !== namaItem) {
+          warnings.push(`${labelIdx}: Barang dikoreksi otomatis: "${namaItem}" → "${pMatch.product.nama}".`);
+        }
+        kodeRawBody = pMatch.product.sku;
+        namaItem = pMatch.product.nama;
+      }
     }
 
     const tahapBarang = normalizeTahap(rawItem?.tahapBarang || rawItem?.tahap);

@@ -13,45 +13,36 @@ import {
   matchCriterion
 } from "../src/qc/matcher.js";
 
-test("kamus lokal bebas database produk/vendor dan memuat 15 kriteria standar", () => {
-  assert.equal(PRODUCT_MASTER.length, 0);
-  assert.equal(VENDORS_PRE.length, 0);
-  assert.equal(VENDORS_FIN.length, 0);
+test("kamus lokal memuat 66 produk, 13 vendor Pre, 9 vendor Fin, dan 15 kriteria standar", () => {
+  assert.equal(PRODUCT_MASTER.length, 66);
+  assert.equal(VENDORS_PRE.length, 13);
+  assert.equal(VENDORS_FIN.length, 9);
   assert.equal(QC_CRITERIA.length, 15);
 });
 
-test("matchProduct mengembalikan null saat database kosong dan mencocokkan bila ada data dinamis", () => {
+test("matchProduct mencocokkan SKU resmi, nama resmi, fuzzy typo, dan null jika tidak dikenal", () => {
   assert.equal(matchProduct("Barang Custom Apa Saja"), null);
-  PRODUCT_MASTER.push({ sku: "RB103002", nama: "Sendok Oval", kategori: "Kitchenware", alias: ["sendok oval"] });
-  try {
-    const bySku = matchProduct("RB103002");
-    assert.equal(bySku?.product.sku, "RB103002");
-    assert.equal(bySku?.confidence, "sku_exact");
+  const bySku = matchProduct("RB103002");
+  assert.equal(bySku?.product.sku, "RB103002");
+  assert.equal(bySku?.product.nama, "Sendok Oval");
+  assert.equal(bySku?.confidence, "sku_exact");
 
-    const fuzzyHigh = matchProduct("Sendok Ovl");
-    assert.equal(fuzzyHigh?.product.sku, "RB103002");
-    assert.ok(fuzzyHigh.score >= 0.9);
-  } finally {
-    PRODUCT_MASTER.pop();
-  }
+  const fuzzyHigh = matchProduct("Sendok Ovl");
+  assert.equal(fuzzyHigh?.product.sku, "RB103002");
+  assert.ok(fuzzyHigh.score >= 0.9);
 });
 
-test("matchVendorWithConfidence mengembalikan null saat database kosong dan membedakan skor bila ada data dinamis", () => {
+test("matchVendorWithConfidence membedakan skor exact vs typo sedang dan null jika tidak dikenal", () => {
   assert.equal(matchVendorWithConfidence("Vendor Custom Bebas", "PRE"), null);
-  VENDORS_PRE.push("Londo", "Widodo Klaten");
-  try {
-    const exact = matchVendorWithConfidence("londo", "PRE");
-    assert.equal(exact?.vendor, "Londo");
-    assert.equal(exact?.confidence, "exact");
-    assert.equal(exact?.requiresConfirmation, false);
+  const exact = matchVendorWithConfidence("londo", "PRE");
+  assert.equal(exact?.vendor, "Londo");
+  assert.equal(exact?.confidence, "exact");
+  assert.equal(exact?.requiresConfirmation, false);
 
-    const medium = matchVendorWithConfidence("Widodo Kltn", "PRE");
-    assert.equal(medium?.vendor, "Widodo Klaten");
-    assert.ok(medium.score >= 0.5 && medium.score < 0.9);
-    assert.equal(medium?.requiresConfirmation, true);
-  } finally {
-    VENDORS_PRE.splice(0, VENDORS_PRE.length);
-  }
+  const medium = matchVendorWithConfidence("Widodo Kltn", "PRE");
+  assert.equal(medium?.vendor, "Widodo Klaten");
+  assert.ok(medium.score >= 0.5 && medium.score < 0.9);
+  assert.equal(medium?.requiresConfirmation, true);
 });
 
 test("matchCriterion mencocokkan 14 kriteria dan fallback ke Lainnya jika < 0.50", () => {

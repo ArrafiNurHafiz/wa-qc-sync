@@ -1,4 +1,5 @@
 // src/qc/qc-parser.js — Parser perintah WA dan template FORM QC (Gaya 4)
+import { PRODUCT_MASTER, VENDORS_PRE, VENDORS_FIN } from "./dictionary.js";
 import { matchProduct, matchVendorWithConfidence, matchCriterion } from "./matcher.js";
 import { validateQcReport } from "./qc-validator.js";
 
@@ -200,6 +201,7 @@ export function parseQcMessage(text, options = {}) {
   const parsedItems = [];
   const corrections = [];
   let hasCorrection = false;
+  let requiresConfirmation = false;
 
   for (let bIdx = 0; bIdx < blocks.length; bIdx++) {
     const blockLines = blocks[bIdx];
@@ -325,9 +327,28 @@ export function parseQcMessage(text, options = {}) {
       return { error: `Field "Periksa" (jumlah diperiksa) pada Item #${bIdx + 1} wajib diisi.` };
     }
 
-    // Bebas custom produk: gunakan SKU resmi hanya bila cocok persis (score === 1), selebihnya pakai teks asli user
     const productMatch = matchProduct(itemRaw.barangInput);
-    if (productMatch && productMatch.score === 1) {
+    if (PRODUCT_MASTER.length > 0) {
+      if (!productMatch) {
+        return {
+          error: `Produk "${itemRaw.barangInput.trim()}" tidak ditemukan di database. Tambahkan lewat Web (Pengaturan → Master Data) atau ketik *#PRODUK*.`
+        };
+      }
+      itemRaw.kodeRawBody = productMatch.product.sku;
+      itemRaw.namaItem = productMatch.product.nama;
+      if (productMatch.corrected) {
+        hasCorrection = true;
+        corrections.push({
+          field: `Barang (Item #${bIdx + 1})`,
+          original: itemRaw.barangInput.trim(),
+          suggested: `${productMatch.product.nama} (${productMatch.product.sku})`,
+          score: productMatch.score
+        });
+        if (productMatch.requiresConfirmation) {
+          requiresConfirmation = true;
+        }
+      }
+    } else if (productMatch && productMatch.score === 1) {
       itemRaw.kodeRawBody = productMatch.product.sku;
       itemRaw.namaItem = productMatch.product.nama;
     } else {
@@ -344,11 +365,33 @@ export function parseQcMessage(text, options = {}) {
     return { error: `Data barang ("Barang" dan "Periksa") belum diisi. Ketik *qc* untuk menyalin template.` };
   }
 
-  // Bebas custom vendor: normalkan huruf besar/kecil bila cocok persis (score === 1), selebihnya pakai teks asli user
+  const hasVendorDb = VENDORS_PRE.length > 0 || VENDORS_FIN.length > 0;
   const vendorMatch = matchVendorWithConfidence(headerData.vendor);
-  const resolvedVendor = vendorMatch && vendorMatch.score === 1
-    ? vendorMatch.vendor
-    : headerData.vendor.trim();
+  let resolvedVendor;
+  if (hasVendorDb) {
+    if (!vendorMatch) {
+      return {
+        error: `Vendor "${headerData.vendor.trim()}" tidak ditemukan di database. Tambahkan lewat Web (Pengaturan → Master Data) atau ketik *#VENDOR*.`
+      };
+    }
+    resolvedVendor = vendorMatch.vendor;
+    if (vendorMatch.corrected) {
+      hasCorrection = true;
+      corrections.push({
+        field: "Vendor",
+        original: headerData.vendor.trim(),
+        suggested: vendorMatch.vendor,
+        score: vendorMatch.score
+      });
+      if (vendorMatch.requiresConfirmation) {
+        requiresConfirmation = true;
+      }
+    }
+  } else {
+    resolvedVendor = vendorMatch && vendorMatch.score === 1
+      ? vendorMatch.vendor
+      : headerData.vendor.trim();
+  }
 
   const validation = validateQcReport({
     sumber: "WHATSAPP",
@@ -373,7 +416,7 @@ export function parseQcMessage(text, options = {}) {
       item: validation.report.items[0],
       warnings: validation.warnings,
       corrected: hasCorrection,
-      requires_confirmation: corrections.length > 0,
+      requires_confirmation: requiresConfirmation,
       corrections
     };
   }
@@ -383,7 +426,7 @@ export function parseQcMessage(text, options = {}) {
     report: validation.report,
     warnings: validation.warnings,
     corrected: hasCorrection,
-    requires_confirmation: corrections.length > 0,
+    requires_confirmation: requiresConfirmation,
     corrections
   };
 }

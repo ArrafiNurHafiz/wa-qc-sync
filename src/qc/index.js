@@ -11,6 +11,8 @@ export {
   isHeaderOrInvalidVendor,
   normalizeVendorName,
   addVendor,
+  addProduct,
+  applyMasterData,
   syncDictionaryFromWebhook
 } from "./dictionary.js";
 

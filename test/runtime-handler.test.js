@@ -93,22 +93,22 @@ test("router WhatsApp menangani qc, #HELP, #KRITERIA, #STATUS, dan whitelist gru
   }
 });
 
-test("router WhatsApp mengirim vendor/produk custom langsung ke GAS dan fallback offline queue saat gagal jaringan", async () => {
+test("router WhatsApp mencocokkan database, menolak item tak dikenal, dan fallback offline queue saat gagal jaringan", async () => {
   const ctx = createTestRuntime();
   try {
-    // 1. Vendor & produk custom bebas langsung diproses ke GAS tanpa #OK
+    // 1. Produk/vendor resmi dari database langsung diproses ke GAS tanpa #OK
     await handleIncomingTextMessage({
       chatJid: "1203630001@g.us",
       participant: "62812@s.whatsapp.net",
       senderName: "Budi (+62812)",
-      text: `FORM QC\nVendor: CV Kayu Custom\nBarang: Talenan Custom 40cm\nPeriksa: 200`,
+      text: `FORM QC\nVendor: Londo\nBarang: Talenan Jepang\nPeriksa: 200`,
       messageId: "m10"
     }, ctx.deps);
     assert.equal(ctx.gasCalls.length, 1);
     assert.equal(ctx.gasCalls[0].action, "LOG_QC_REPORT");
-    assert.equal(ctx.gasCalls[0].data.vendor, "CV Kayu Custom");
-    assert.equal(ctx.gasCalls[0].data.items[0].kodeRawBody, "");
-    assert.equal(ctx.gasCalls[0].data.items[0].namaItem, "Talenan Custom 40cm");
+    assert.equal(ctx.gasCalls[0].data.vendor, "Londo");
+    assert.equal(ctx.gasCalls[0].data.items[0].kodeRawBody, "RB201004");
+    assert.equal(ctx.gasCalls[0].data.items[0].namaItem, "Talenan Jepang");
     assert.match(ctx.sentMessages[0].content.text, /spreadsheets\/d\/sheet123/);
 
     // 2. Simulasi error jaringan -> masuk MessageQueue, lalu retry berhasil
@@ -175,7 +175,7 @@ test("router WhatsApp mendukung alur berurutan FORM QC ([ITEM 1]) -> [ITEM 2] (A
       chatJid: "1203630001@g.us",
       participant: "62812@s.whatsapp.net",
       senderName: "Budi (+62812)",
-      text: "FORM QC\nVendor: CV Jati\nPO: PO-01\n[ITEM 1]\nBarang: Meja A\nPeriksa: 100\nKeputusan: Lolos",
+      text: "FORM QC\nVendor: Londo\nPO: PO-01\n[ITEM 1]\nBarang: Piring\nPeriksa: 100\nKeputusan: Lolos",
       messageId: "s1"
     }, deps);
     assert.equal(ctx.gasCalls[0].action, "LOG_QC_REPORT");
@@ -187,13 +187,13 @@ test("router WhatsApp mendukung alur berurutan FORM QC ([ITEM 1]) -> [ITEM 2] (A
       chatJid: "1203630001@g.us",
       participant: "62812@s.whatsapp.net",
       senderName: "Budi (+62812)",
-      text: "[ITEM 2]\nBarang: Kursi B\nPeriksa: 50\nCrack: 5\nKeputusan: Bersyarat",
+      text: "[ITEM 2]\nBarang: Mangkok\nPeriksa: 50\nCrack: 5\nKeputusan: Bersyarat",
       messageId: "s2"
     }, deps);
     assert.equal(ctx.gasCalls[1].action, "APPEND_QC_ITEM");
     assert.equal(ctx.gasCalls[1].data.noLaporan, noLap1);
     assert.equal(ctx.gasCalls[1].data.fileId, "sheet-file-1");
-    assert.equal(ctx.gasCalls[1].data.item.namaItem, "Kursi B");
+    assert.equal(ctx.gasCalls[1].data.item.namaItem, "Mangkok");
     assert.match(ctx.sentMessages[1].content.text, /ITEM #2 DITAMBAHKAN/i);
 
     // 3. Mulai kunjungan baru via FORM QC lagi
@@ -201,11 +201,11 @@ test("router WhatsApp mendukung alur berurutan FORM QC ([ITEM 1]) -> [ITEM 2] (A
       chatJid: "1203630001@g.us",
       participant: "62812@s.whatsapp.net",
       senderName: "Budi (+62812)",
-      text: "FORM QC\nVendor: CV Baru\nPO: PO-02\n[ITEM 1]\nBarang: Lemari C\nPeriksa: 20\nKeputusan: Lolos",
+      text: "FORM QC\nVendor: Janu\nPO: PO-02\n[ITEM 1]\nBarang: Cobek\nPeriksa: 20\nKeputusan: Lolos",
       messageId: "s3"
     }, deps);
     assert.equal(ctx.gasCalls[2].action, "LOG_QC_REPORT");
-    assert.equal(ctx.gasCalls[2].data.vendor, "CV Baru");
+    assert.equal(ctx.gasCalls[2].data.vendor, "Janu");
   } finally {
     rmSync(ctx.dir, { recursive: true, force: true });
   }
