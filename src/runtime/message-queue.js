@@ -115,6 +115,12 @@ export class MessageQueue {
     return deletedCount;
   }
 
+  clear() {
+    const prevCount = this.loadQueue().length;
+    this.saveQueue([]);
+    return prevCount;
+  }
+
   getStatus() {
     const messages = this.loadQueue();
     const pending = messages.filter((m) => m.status === "pending").length;

@@ -3,6 +3,8 @@ const state = {
   master: { products: [], vendorsPre: [], vendorsFin: [], criteria: [] },
   help: { helpText: "", criteriaText: "", templateText: "" },
   reports: [],
+  reportItems: [],
+  defects: [],
   summary: null,
   gasConnected: false,
   dataVersion: 0,
@@ -893,6 +895,119 @@ function toComparableIsoDate(rawDate) {
   return `${m[3]}-${m[2]}-${m[1]}`;
 }
 
+function truncateChartLabel(text, max = 18) {
+  const s = String(text || "-").trim();
+  return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+}
+
+function renderDashboardCharts(filteredReports) {
+  const vendorEl = document.getElementById("vendorChartContainer");
+  const defectEl = document.getElementById("defectChartContainer");
+  const defectTotalLabel = document.getElementById("defectChartTotalLabel");
+  if (!vendorEl || !defectEl) return;
+
+  const activeReports = (filteredReports || []).filter((r) => r.status !== "VOID");
+  if (activeReports.length === 0) {
+    vendorEl.innerHTML = `<div class="chart-empty">Belum ada data vendor aktif untuk ditampilkan.</div>`;
+    defectEl.innerHTML = `<div class="chart-empty">Belum ada data kerusakan untuk ditampilkan.</div>`;
+    if (defectTotalLabel) defectTotalLabel.textContent = "0 pcs";
+    return;
+  }
+
+  // 1. Agregasi per Vendor
+  const vendorMap = new Map();
+  const activeReportNos = new Set();
+  for (const r of activeReports) {
+    activeReportNos.add(r.noLaporan);
+    const key = String(r.vendor || "-").trim() || "-";
+    const prev = vendorMap.get(key) || { vendor: key, inspected: 0, defect: 0, passed: 0 };
+    prev.inspected += Number(r.totalDiperiksa) || 0;
+    prev.defect += Number(r.totalRusak) || 0;
+    prev.passed += Number(r.totalLolos) || 0;
+    vendorMap.set(key, prev);
+  }
+
+  const vendorRows = Array.from(vendorMap.values())
+    .sort((a, b) => b.inspected - a.inspected || b.defect - a.defect)
+    .slice(0, 7);
+  const maxInspected = Math.max(1, ...vendorRows.map((v) => v.inspected));
+
+  const rowH = 32;
+  const labelW = 128;
+  const barMaxW = 240;
+  const rightW = 92;
+  const svgW = labelW + barMaxW + rightW;
+  const vHeight = Math.max(120, vendorRows.length * rowH + 12);
+
+  const vendorBars = vendorRows.map((v, idx) => {
+    const y = 8 + idx * rowH;
+    const totalW = Math.max(2, Math.round((v.inspected / maxInspected) * barMaxW));
+    const okW = v.inspected > 0 ? Math.round((v.passed / v.inspected) * totalW) : totalW;
+    const errW = Math.max(0, totalW - okW);
+    const passRate = v.inspected > 0 ? Math.round((v.passed / v.inspected) * 1000) / 10 : 100;
+    const barY = y + 5;
+    const barH = 16;
+
+    return `
+      <g>
+        <title>${escapeHtml(v.vendor)}: ${v.passed} lolos, ${v.defect} rusak (${passRate}%)</title>
+        <text x="${labelW - 8}" y="${y + 17}" text-anchor="end" font-size="11.5" fill="var(--ink-primary)" font-family="var(--font-sans)">${escapeHtml(truncateChartLabel(v.vendor, 17))}</text>
+        <rect x="${labelW}" y="${barY}" width="${barMaxW}" height="${barH}" rx="4" fill="var(--surface-raised)" />
+        ${okW > 0 ? `<rect x="${labelW}" y="${barY}" width="${okW}" height="${barH}" rx="4" fill="var(--status-ok)" />` : ""}
+        ${errW > 0 ? `<rect x="${labelW + okW}" y="${barY}" width="${errW}" height="${barH}" rx="2" fill="var(--status-err)" />` : ""}
+        <text x="${labelW + barMaxW + 8}" y="${y + 17}" font-size="11" fill="var(--ink-secondary)" font-family="var(--font-mono)">${passRate}% (${v.inspected})</text>
+      </g>
+    `;
+  }).join("");
+
+  vendorEl.innerHTML = `<svg class="chart-svg" viewBox="0 0 ${svgW} ${vHeight}" role="img" aria-label="Grafik performa QC per vendor">${vendorBars}</svg>`;
+
+  // 2. Agregasi Top Jenis Kerusakan
+  const defectMap = new Map();
+  let totalDefectQty = 0;
+  for (const d of state.defects || []) {
+    if (!activeReportNos.has(d.noLaporan)) continue;
+    const qty = Number(d.qty) || 0;
+    if (qty <= 0) continue;
+    const label = String(d.label || d.kriteriaId || "Lainnya").trim();
+    defectMap.set(label, (defectMap.get(label) || 0) + qty);
+    totalDefectQty += qty;
+  }
+
+  if (defectTotalLabel) {
+    defectTotalLabel.textContent = `${totalDefectQty.toLocaleString("id-ID")} pcs`;
+  }
+
+  const defectRows = Array.from(defectMap.entries())
+    .map(([label, qty]) => ({ label, qty }))
+    .sort((a, b) => b.qty - a.qty)
+    .slice(0, 7);
+
+  if (defectRows.length === 0) {
+    defectEl.innerHTML = `<div class="chart-empty">Tidak ada kerusakan tercatat pada filter ini (100% mulus).</div>`;
+    return;
+  }
+
+  const maxDefect = Math.max(1, ...defectRows.map((d) => d.qty));
+  const dHeight = Math.max(120, defectRows.length * rowH + 12);
+  const defectBars = defectRows.map((d, idx) => {
+    const y = 8 + idx * rowH;
+    const w = Math.max(4, Math.round((d.qty / maxDefect) * barMaxW));
+    const pct = totalDefectQty > 0 ? Math.round((d.qty / totalDefectQty) * 1000) / 10 : 0;
+    return `
+      <g>
+        <title>${escapeHtml(d.label)}: ${d.qty} pcs (${pct}%)</title>
+        <text x="${labelW - 8}" y="${y + 17}" text-anchor="end" font-size="11.5" fill="var(--ink-primary)" font-family="var(--font-sans)">${escapeHtml(truncateChartLabel(d.label, 17))}</text>
+        <rect x="${labelW}" y="${y + 5}" width="${barMaxW}" height="16" rx="4" fill="var(--surface-raised)" />
+        <rect x="${labelW}" y="${y + 5}" width="${w}" height="16" rx="4" fill="var(--accent-action)" />
+        <text x="${labelW + barMaxW + 8}" y="${y + 17}" font-size="11" fill="var(--ink-secondary)" font-family="var(--font-mono)">${d.qty} (${pct}%)</text>
+      </g>
+    `;
+  }).join("");
+
+  defectEl.innerHTML = `<svg class="chart-svg" viewBox="0 0 ${svgW} ${dHeight}" role="img" aria-label="Grafik top jenis kerusakan">${defectBars}</svg>`;
+}
+
 function renderReportsTable() {
   const tbody = document.getElementById("historyTableBody");
   if (!tbody) return;
@@ -940,6 +1055,8 @@ function renderReportsTable() {
     updateSummaryMetrics(state.summary);
   }
 
+  renderDashboardCharts(filtered);
+
   if (filtered.length === 0) {
     tbody.innerHTML = `<tr><td colspan="11" class="empty-state">Belum ada laporan QC yang cocok.</td></tr>`;
     return;
@@ -985,6 +1102,7 @@ async function loadReports(fresh = false) {
     notice.classList.remove("hidden");
     document.getElementById("btnGoSettingsNotice")?.addEventListener("click", () => switchTab("tab-settings"));
     if (tbody) tbody.innerHTML = `<tr><td colspan="11" class="empty-state">Hubungkan GAS_QC_WEBHOOK_URL di Pengaturan untuk memuat rekap dari Google Sheets.</td></tr>`;
+    renderDashboardCharts([]);
     return;
   }
   try {
@@ -995,6 +1113,7 @@ async function loadReports(fresh = false) {
       notice.classList.remove("hidden");
       document.getElementById("btnGoSettingsNotice")?.addEventListener("click", () => switchTab("tab-settings"));
       if (tbody) tbody.innerHTML = `<tr><td colspan="11" class="empty-state">Hubungkan GAS_QC_WEBHOOK_URL di Pengaturan untuk memuat rekap dari Google Sheets.</td></tr>`;
+      renderDashboardCharts([]);
       return;
     }
 
@@ -1002,6 +1121,7 @@ async function loadReports(fresh = false) {
     state.summary = json.data.summary;
     state.reports = json.data.reports || [];
     state.reportItems = json.data.items || [];
+    state.defects = json.data.defects || [];
     updateSummaryMetrics(state.summary);
     renderReportsTable();
   } catch (err) {
@@ -1218,37 +1338,187 @@ document.getElementById("btnRetryQueue")?.addEventListener("click", async () => 
 
 document.getElementById("btnRefreshQueue")?.addEventListener("click", loadQueueStatus);
 
+document.getElementById("btnResetAllData")?.addEventListener("click", async () => {
+  const resConfirm = await showConfirmDialog({
+    title: "Reset Semua Data QC",
+    message: "Tindakan ini akan menghapus seluruh baris data di Rekap Google Sheets, memindahkan file laporan Drive ke Sampah, dan mengosongkan antrean lokal. Pengaturan & Template Master tetap aman.",
+    confirmText: "Reset Bersih Sekarang",
+    destruct: true,
+    requireInput: true,
+    inputLabel: 'KETIK "RESET" UNTUK KONFIRMASI *'
+  });
+  if (!resConfirm.confirmed) return;
+
+  if (String(resConfirm.value || "").trim().toUpperCase() !== "RESET") {
+    showToast('Konfirmasi dibatalkan: ketik "RESET" dengan benar.', "error");
+    return;
+  }
+
+  const btn = document.getElementById("btnResetAllData");
+  btn.disabled = true;
+  try {
+    const resp = await fetch("/api/qc/reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm: "RESET" })
+    });
+    const json = await resp.json();
+    showToast(json.message, json.success ? "success" : "error");
+    if (json.success) {
+      await loadQueueStatus();
+      await loadReports(true);
+    }
+  } catch (err) {
+    showToast(`Gagal mereset data: ${err.message}`, "error");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function renderMasterDataUI() {
+  const vendorDl = document.getElementById("vendorDatalist");
+  const allVendors = [...new Set([...(state.master.vendorsPre || []), ...(state.master.vendorsFin || [])])];
+  if (vendorDl) {
+    vendorDl.innerHTML = allVendors.map((v) => `<option value="${escapeHtml(v)}"></option>`).join("");
+  }
+
+  const prodDl = document.getElementById("productDatalist");
+  const products = state.master.products || [];
+  if (prodDl) {
+    prodDl.innerHTML = products
+      .map((p) => `<option value="${escapeHtml(`${p.sku} — ${p.nama}`)}"></option>`)
+      .join("");
+  }
+
+  const prodCountEl = document.getElementById("masterProductCount");
+  const prodListEl = document.getElementById("masterProductList");
+  if (prodCountEl) prodCountEl.textContent = String(products.length);
+  if (prodListEl) {
+    prodListEl.innerHTML = products.length === 0
+      ? `<span class="field-hint">Belum ada barang terdaftar di database.</span>`
+      : products.map((p) => `<span class="master-chip"><span class="master-chip-code">${escapeHtml(p.sku)}</span>${escapeHtml(p.nama)}</span>`).join("");
+  }
+
+  const vendorCountEl = document.getElementById("masterVendorCount");
+  const vendorListEl = document.getElementById("masterVendorList");
+  if (vendorCountEl) vendorCountEl.textContent = String(allVendors.length);
+  if (vendorListEl) {
+    vendorListEl.innerHTML = allVendors.length === 0
+      ? `<span class="field-hint">Belum ada vendor terdaftar di database.</span>`
+      : allVendors.map((v) => `<span class="master-chip">${escapeHtml(v)}</span>`).join("");
+  }
+}
+
+async function refreshMasterData(fresh = false) {
+  const masterRes = await fetch(`/api/master${fresh ? "?fresh=1" : ""}`).then((r) => r.json());
+  if (masterRes.success) {
+    state.master = {
+      products: masterRes.products || [],
+      vendorsPre: masterRes.vendorsPre || [],
+      vendorsFin: masterRes.vendorsFin || [],
+      criteria: masterRes.criteria || []
+    };
+    renderMasterDataUI();
+  }
+}
+
+document.getElementById("formAddProduct")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const skuInput = document.getElementById("newProductSku");
+  const nameInput = document.getElementById("newProductName");
+  const catInput = document.getElementById("newProductCategory");
+  const btn = document.getElementById("btnAddProduct");
+
+  const nama = String(nameInput?.value || "").trim();
+  if (!nama) {
+    showToast("Nama barang wajib diisi.", "error");
+    nameInput?.focus();
+    return;
+  }
+
+  btn.disabled = true;
+  try {
+    const resp = await fetch("/api/master/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sku: String(skuInput?.value || "").trim(),
+        nama,
+        kategori: String(catInput?.value || "Kitchenware").trim()
+      })
+    });
+    const json = await resp.json();
+    showToast(json.message, json.success ? "success" : "error");
+    if (json.success) {
+      if (skuInput) skuInput.value = "";
+      if (nameInput) nameInput.value = "";
+      await refreshMasterData(false);
+    }
+  } catch (err) {
+    showToast(`Gagal menambah barang: ${err.message}`, "error");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("formAddVendor")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const nameInput = document.getElementById("newVendorName");
+  const typeSelect = document.getElementById("newVendorType");
+  const btn = document.getElementById("btnAddVendor");
+
+  const nama = String(nameInput?.value || "").trim();
+  if (!nama) {
+    showToast("Nama vendor wajib diisi.", "error");
+    nameInput?.focus();
+    return;
+  }
+
+  btn.disabled = true;
+  try {
+    const resp = await fetch("/api/master/vendors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nama,
+        tipe: typeSelect?.value || "Pre-Finishing"
+      })
+    });
+    const json = await resp.json();
+    showToast(json.message, json.success ? "success" : "error");
+    if (json.success) {
+      if (nameInput) nameInput.value = "";
+      await refreshMasterData(false);
+    }
+  } catch (err) {
+    showToast(`Gagal menambah vendor: ${err.message}`, "error");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("btnSyncMasterProducts")?.addEventListener("click", async () => {
+  const btn = document.getElementById("btnSyncMasterProducts");
+  btn.disabled = true;
+  try {
+    await refreshMasterData(true);
+    showToast("Master data disinkronkan dari Google Sheets.", "success");
+  } catch (err) {
+    showToast(`Gagal sinkronisasi master data: ${err.message}`, "error");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // --- Bootstrap ---
 async function init() {
   document.getElementById("qcTanggal").value = getTodayIso();
 
   try {
-    const [masterRes, helpRes] = await Promise.all([
-      fetch("/api/master").then((r) => r.json()),
+    const [, helpRes] = await Promise.all([
+      refreshMasterData(false),
       fetch("/api/help").then((r) => r.json())
     ]);
-
-    if (masterRes.success) {
-      state.master = {
-        products: masterRes.products || [],
-        vendorsPre: masterRes.vendorsPre || [],
-        vendorsFin: masterRes.vendorsFin || [],
-        criteria: masterRes.criteria || []
-      };
-
-      const vendorDl = document.getElementById("vendorDatalist");
-      const allVendors = [...new Set([...state.master.vendorsPre, ...state.master.vendorsFin])];
-      if (vendorDl) {
-        vendorDl.innerHTML = allVendors.map((v) => `<option value="${escapeHtml(v)}"></option>`).join("");
-      }
-
-      const prodDl = document.getElementById("productDatalist");
-      if (prodDl) {
-        prodDl.innerHTML = state.master.products
-          .map((p) => `<option value="${escapeHtml(`${p.sku} — ${p.nama}`)}"></option>`)
-          .join("");
-      }
-    }
 
     state.help = helpRes || {};
     renderProtoSnippet();

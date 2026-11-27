@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AppConfig } from "../src/runtime/app-config.js";
 import { MessageQueue } from "../src/runtime/message-queue.js";
+import { PRODUCT_MASTER, VENDORS_PRE } from "../src/qc/dictionary.js";
 import { createWebApp } from "../src/web/server.js";
 
 async function withServer(depsOverrides, fn) {
@@ -79,7 +80,7 @@ test("GET /api/master, /api/help, dan /api/config tidak membocorkan API_SECRET",
   await withServer({}, async ({ baseUrl }) => {
     const master = await fetch(`${baseUrl}/api/master`).then((r) => r.json());
     assert.equal(master.success, true);
-    assert.equal(master.products.length, 0);
+    assert.equal(master.products.length, 66);
     assert.equal(master.criteria.length, 15);
     assert.equal(master.criteria.length, 15);
 
@@ -209,7 +210,7 @@ test("GET /api/qc/reports cache & POST /api/qc/reports/void menangani ALREADY_VO
         return { status: "success" };
       }
     },
-    async ({ baseUrl, gasCalls }) => {
+    async ({ baseUrl, queue, gasCalls }) => {
       const r1 = await fetch(`${baseUrl}/api/qc/reports`).then((r) => r.json());
       assert.equal(r1.success, true);
       assert.equal(r1.cached, undefined);
@@ -237,6 +238,108 @@ test("GET /api/qc/reports cache & POST /api/qc/reports/void menangani ALREADY_VO
       // Unknown API path harus JSON 404
       const notFound = await fetch(`${baseUrl}/api/tidak-ada`);
       assert.equal(notFound.status, 404);
+
+      // POST /api/qc/reset menolak tanpa confirm=RESET dan membersihkan antrean + GAS saat confirm=RESET
+      queue.saveToQueue("628111@s.whatsapp.net", "628111@s.whatsapp.net", "FORM QC", "offline", { data: { idempotencyKey: "q-reset-1" } });
+      const badReset = await fetch(`${baseUrl}/api/qc/reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: "SALAH" })
+      });
+      assert.equal(badReset.status, 400);
+
+      const okReset = await fetch(`${baseUrl}/api/qc/reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: "RESET" })
+      });
+      assert.equal(okReset.status, 200);
+      const okResetJson = await okReset.json();
+      assert.equal(okResetJson.success, true);
+      assert.equal(okResetJson.clearedQueueCount, 1);
+      assert.equal(okResetJson.gasReset, true);
+      assert.equal(queue.loadQueue().length, 0);
+      assert.ok(gasCalls.some((c) => c.action === "RESET_QC_DATA"));
     }
   );
+});
+
+test("POST /api/master/products & /api/master/vendors menambah master data dan auto-correct di laporan", async () => {
+  const origProdLen = PRODUCT_MASTER.length;
+  const origPreLen = VENDORS_PRE.length;
+
+  try {
+    await withServer(
+      {
+        onGasCall: async (action, data) => {
+          if (action === "ADD_MASTER_PRODUCT") {
+            return {
+              status: "success",
+              product: { kodeRawBody: data.kodeRawBody || "RB-067", namaProduk: data.namaProduk, kategori: data.kategori }
+            };
+          }
+          if (action === "ADD_MASTER_VENDOR") {
+            return {
+              status: "success",
+              vendor: { kodeVendor: "VPRE-014", namaVendor: data.namaVendor, tipeVendor: data.tipeVendor }
+            };
+          }
+          if (action === "LOG_QC_REPORT") {
+            return { status: "success", noLaporan: data.noLaporan, sheetUrl: "https://s/1", pdfUrl: "" };
+          }
+          return { status: "success", data: {} };
+        }
+      },
+      async ({ baseUrl }) => {
+        const addProd = await fetch(`${baseUrl}/api/master/products`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nama: "Mangkuk Jati Besar", kategori: "Kitchenware" })
+        });
+        assert.equal(addProd.status, 201);
+        const prodJson = await addProd.json();
+        assert.equal(prodJson.success, true);
+        assert.equal(prodJson.product.nama, "Mangkuk Jati Besar");
+
+        const addVen = await fetch(`${baseUrl}/api/master/vendors`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nama: "CV Kayu Lestari", tipe: "Pre-Finishing" })
+        });
+        assert.equal(addVen.status, 201);
+
+        const master = await fetch(`${baseUrl}/api/master`).then((r) => r.json());
+        assert.equal(master.products.length, origProdLen + 1);
+        assert.ok(master.vendorsPre.includes("CV Kayu Lestari"));
+
+        // Typo di Web Form -> auto-correct
+        const typoReport = await fetch(`${baseUrl}/api/qc/reports`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            vendor: "CV Kayu Lstari",
+            items: [{ namaItem: "Mangkuk Jati Besr", tahapBarang: "Unfinish", qtyDiperiksa: 20, mcMentah: 12, rusak: [], keputusan: "Lolos" }]
+          })
+        });
+        assert.equal(typoReport.status, 201);
+        const typoJson = await typoReport.json();
+        assert.ok(typoJson.warnings.some((w) => w.includes("CV Kayu Lestari")));
+        assert.ok(typoJson.warnings.some((w) => w.includes("Mangkuk Jati Besar")));
+
+        // Produk tidak ada di DB -> 400 VALIDATION_ERROR
+        const unknownReport = await fetch(`${baseUrl}/api/qc/reports`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            vendor: "CV Kayu Lestari",
+            items: [{ namaItem: "Meja Besi Xyz", tahapBarang: "Unfinish", qtyDiperiksa: 20, mcMentah: 12, rusak: [], keputusan: "Lolos" }]
+          })
+        });
+        assert.equal(unknownReport.status, 400);
+      }
+    );
+  } finally {
+    PRODUCT_MASTER.length = origProdLen;
+    VENDORS_PRE.length = origPreLen;
+  }
 });

@@ -9,6 +9,9 @@ import {
   VENDORS_PRE,
   VENDORS_FIN,
   QC_CRITERIA,
+  addProduct,
+  addVendor,
+  applyMasterData,
   validateQcReport,
   getQcTemplateText,
   getHelpText,
@@ -108,13 +111,124 @@ export function createWebApp(deps = {}) {
     });
   });
 
-  app.get("/api/master", (req, res) => {
+  app.get("/api/master", async (req, res) => {
+    const gasUrl = String(config.get("GAS_QC_WEBHOOK_URL") || "").trim();
+    const shouldSync = req.query.fresh === "1" ||
+      (gasUrl && PRODUCT_MASTER.length === 0 && VENDORS_PRE.length === 0 && VENDORS_FIN.length === 0);
+
+    if (shouldSync && gasUrl) {
+      try {
+        const masterRes = await sendToGas("GET_MASTER_DATA", {});
+        if (masterRes?.status === "success" && masterRes.data) {
+          applyMasterData(masterRes.data);
+        }
+      } catch (_) {}
+    }
+
     res.json({
       success: true,
       products: PRODUCT_MASTER.map((p) => ({ sku: p.sku, nama: p.nama, kategori: p.kategori })),
       vendorsPre: [...VENDORS_PRE],
       vendorsFin: [...VENDORS_FIN],
       criteria: QC_CRITERIA.map((c) => ({ id: c.id, shortLabel: c.shortLabel, label: c.label, group: c.group }))
+    });
+  });
+
+  app.post("/api/master/products", async (req, res) => {
+    const nama = String(req.body?.nama || req.body?.namaProduk || "").trim();
+    const sku = String(req.body?.sku || req.body?.kodeRawBody || "").trim().toUpperCase();
+    const kategori = String(req.body?.kategori || "Kitchenware").trim() || "Kitchenware";
+
+    if (!nama) {
+      return res.status(400).json({
+        success: false,
+        code: "VALIDATION_ERROR",
+        message: "Nama barang wajib diisi."
+      });
+    }
+
+    const gasUrl = String(config.get("GAS_QC_WEBHOOK_URL") || "").trim();
+    let gasProduct = null;
+    if (gasUrl) {
+      try {
+        const gasRes = await sendToGas("ADD_MASTER_PRODUCT", { kodeRawBody: sku, namaProduk: nama, kategori });
+        if (gasRes?.status !== "success") {
+          return res.status(400).json({
+            success: false,
+            code: gasRes?.code || "GAS_ERROR",
+            message: gasRes?.message || "Gagal menyimpan barang ke Google Sheets."
+          });
+        }
+        gasProduct = gasRes.product || null;
+      } catch (err) {
+        return res.status(502).json({
+          success: false,
+          message: `Gagal menghubungi GAS: ${getSafeErrorMessage(err)}`
+        });
+      }
+    }
+
+    const saved = addProduct({
+      sku: gasProduct?.kodeRawBody || sku,
+      nama: gasProduct?.namaProduk || nama,
+      kategori: gasProduct?.kategori || kategori
+    });
+    bumpMutation();
+    return res.status(201).json({
+      success: true,
+      product: saved ? { sku: saved.sku, nama: saved.nama, kategori: saved.kategori } : null,
+      message: `Barang "${nama}" berhasil ditambahkan ke database.`
+    });
+  });
+
+  app.post("/api/master/vendors", async (req, res) => {
+    const nama = String(req.body?.nama || req.body?.namaVendor || "").trim();
+    const tipeRaw = String(req.body?.tipe || req.body?.tipeVendor || "Pre-Finishing").trim();
+    const tipeLower = tipeRaw.toLowerCase();
+    const tipe = tipeLower === "both" ? "Both" : (tipeLower.includes("fin") && !tipeLower.includes("pre") ? "Finishing" : "Pre-Finishing");
+
+    if (!nama) {
+      return res.status(400).json({
+        success: false,
+        code: "VALIDATION_ERROR",
+        message: "Nama vendor wajib diisi."
+      });
+    }
+
+    const gasUrl = String(config.get("GAS_QC_WEBHOOK_URL") || "").trim();
+    let gasVendor = null;
+    if (gasUrl) {
+      try {
+        const gasRes = await sendToGas("ADD_MASTER_VENDOR", { namaVendor: nama, tipeVendor: tipe });
+        if (gasRes?.status !== "success") {
+          return res.status(400).json({
+            success: false,
+            code: gasRes?.code || "GAS_ERROR",
+            message: gasRes?.message || "Gagal menyimpan vendor ke Google Sheets."
+          });
+        }
+        gasVendor = gasRes.vendor || null;
+      } catch (err) {
+        return res.status(502).json({
+          success: false,
+          message: `Gagal menghubungi GAS: ${getSafeErrorMessage(err)}`
+        });
+      }
+    }
+
+    const ok = addVendor(gasVendor?.namaVendor || nama, gasVendor?.tipeVendor || tipe);
+    if (!ok) {
+      return res.status(400).json({
+        success: false,
+        code: "VALIDATION_ERROR",
+        message: "Nama vendor tidak valid."
+      });
+    }
+    bumpMutation();
+    return res.status(201).json({
+      success: true,
+      vendor: { nama: gasVendor?.namaVendor || nama, tipe: gasVendor?.tipeVendor || tipe },
+      message: `Vendor "${nama}" berhasil ditambahkan ke database.`
     });
   });
 
@@ -384,6 +498,61 @@ export function createWebApp(deps = {}) {
       return res.status(502).json({
         success: false,
         message: `Gagal menghubungi GAS: ${getSafeErrorMessage(err)}`
+      });
+    }
+  });
+
+  app.post("/api/qc/reset", async (req, res) => {
+    const confirmText = String(req.body?.confirm || "").trim().toUpperCase();
+    if (confirmText !== "RESET") {
+      return res.status(400).json({
+        success: false,
+        code: "VALIDATION_ERROR",
+        message: "Ketik RESET untuk mengonfirmasi penghapusan seluruh data QC."
+      });
+    }
+
+    const clearedQueueCount = typeof queue.clear === "function" ? queue.clear() : 0;
+    dashboardCache = null;
+    dashboardCacheTime = 0;
+    bumpMutation();
+
+    const gasUrl = String(config.get("GAS_QC_WEBHOOK_URL") || "").trim();
+    if (!gasUrl) {
+      return res.json({
+        success: true,
+        clearedQueueCount,
+        gasReset: false,
+        trashedFiles: 0,
+        message: `Antrean lokal dibersihkan (${clearedQueueCount} item). GAS belum terhubung.`
+      });
+    }
+
+    try {
+      const result = await sendToGas("RESET_QC_DATA", { confirm: "RESET" });
+      if (result?.status === "success") {
+        dashboardCache = null;
+        dashboardCacheTime = 0;
+        bumpMutation();
+        return res.json({
+          success: true,
+          clearedQueueCount,
+          gasReset: true,
+          clearedSheets: result.clearedSheets || 0,
+          trashedFiles: result.trashedFiles || 0,
+          message: result.message || "Semua data QC di Google Sheets, Drive, dan antrean lokal berhasil direset bersih."
+        });
+      }
+
+      return res.status(400).json({
+        success: false,
+        code: result?.code || "RESET_ERROR",
+        message: result?.message || "Gagal mereset data di Google Apps Script."
+      });
+    } catch (err) {
+      return res.status(502).json({
+        success: false,
+        message: `Antrean lokal dibersihkan, namun gagal menghubungi GAS: ${getSafeErrorMessage(err)}`
       });
     }
   });

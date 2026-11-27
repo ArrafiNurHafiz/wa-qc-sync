@@ -284,6 +284,37 @@
           </div>
         </div>
 
+        <div class="charts-grid" aria-label="Grafik Rekapitulasi QC">
+          <div class="card chart-card">
+            <div class="chart-head">
+              <div>
+                <span class="card-tag">GRAFIK VENDOR</span>
+                <h3 class="chart-title">Performa QC per Vendor</h3>
+              </div>
+              <div class="chart-legend">
+                <span class="legend-item"><span class="legend-dot ok"></span>Lolos</span>
+                <span class="legend-item"><span class="legend-dot err"></span>Rusak</span>
+              </div>
+            </div>
+            <div id="vendorChartContainer" class="chart-svg-wrap">
+              <div class="chart-empty">Memuat grafik vendor...</div>
+            </div>
+          </div>
+
+          <div class="card chart-card">
+            <div class="chart-head">
+              <div>
+                <span class="card-tag">PARETO KERUSAKAN</span>
+                <h3 class="chart-title">Top Jenis Kerusakan</h3>
+              </div>
+              <span class="field-hint mono" id="defectChartTotalLabel">0 pcs</span>
+            </div>
+            <div id="defectChartContainer" class="chart-svg-wrap">
+              <div class="chart-empty">Memuat grafik kerusakan...</div>
+            </div>
+          </div>
+        </div>
+
         <div id="historyNotice" class="info-banner hidden"></div>
 
         <div class="table-frame">
@@ -392,6 +423,74 @@
             </div>
 
             <div id="queueListContainer" class="queue-list"></div>
+
+            <div class="queue-actions" style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle, #e2e8f0); flex-direction: column; align-items: flex-start; gap: 0.5rem;">
+              <span class="field-hint"><strong>Reset Data QC:</strong> Mengosongkan semua rekap Google Sheets (<code>DASHBOARD</code>, <code>REKAP_QC_*</code>, <code>ROWBODY</code>, <code>FINISHING</code>, <code>LOG_KERUSAKAN</code>), memindahkan file laporan Drive ke Sampah, dan membersihkan antrean lokal. Konfigurasi &amp; Master Template tetap aman.</span>
+              <button type="button" class="btn btn-destruct" id="btnResetAllData">Reset Semua Data QC</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <span class="card-tag">MASTER DATA &middot; DB_MASTER</span>
+              <h3 class="card-title">Database Barang QC</h3>
+              <p class="card-desc">Daftar barang resmi untuk validasi &amp; auto-correct typo saat input via WhatsApp maupun Web.</p>
+            </div>
+            <form id="formAddProduct" class="settings-form" novalidate>
+              <div class="master-form-row">
+                <div class="field-item">
+                  <label class="field-label" for="newProductSku">KODE / SKU (OPSIONAL)</label>
+                  <input type="text" id="newProductSku" class="field-input mono" placeholder="Otomatis jika kosong" autocomplete="off">
+                </div>
+                <div class="field-item">
+                  <label class="field-label" for="newProductName">NAMA BARANG *</label>
+                  <input type="text" id="newProductName" class="field-input" placeholder="Cth: Sendok Oval Jati" required autocomplete="off">
+                </div>
+                <div class="field-item">
+                  <label class="field-label" for="newProductCategory">KATEGORI</label>
+                  <input type="text" id="newProductCategory" class="field-input" value="Kitchenware" placeholder="Kitchenware" autocomplete="off">
+                </div>
+              </div>
+              <div class="settings-actions">
+                <button type="submit" class="btn btn-primary" id="btnAddProduct">Tambah Barang</button>
+                <button type="button" class="btn btn-neutral" id="btnSyncMasterProducts">Sinkron dari Sheets</button>
+              </div>
+            </form>
+            <div class="master-list-wrap">
+              <span class="field-label">BARANG TERDAFTAR (<span id="masterProductCount">0</span>)</span>
+              <div id="masterProductList" class="master-chip-list"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <span class="card-tag">MASTER DATA &middot; VENDOR_MASTER</span>
+              <h3 class="card-title">Database Vendor QC</h3>
+              <p class="card-desc">Daftar vendor rekanan untuk validasi &amp; auto-correct typo penulisan nama vendor.</p>
+            </div>
+            <form id="formAddVendor" class="settings-form" novalidate>
+              <div class="master-form-row master-form-row-2">
+                <div class="field-item">
+                  <label class="field-label" for="newVendorName">NAMA VENDOR *</label>
+                  <input type="text" id="newVendorName" class="field-input" placeholder="Cth: CV Sumber Kayu" required autocomplete="off">
+                </div>
+                <div class="field-item">
+                  <label class="field-label" for="newVendorType">TIPE VENDOR</label>
+                  <select id="newVendorType" class="field-input">
+                    <option value="Pre-Finishing">Pre-Finishing</option>
+                    <option value="Finishing">Finishing</option>
+                    <option value="Both">Both (Pre &amp; Fin)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="settings-actions">
+                <button type="submit" class="btn btn-primary" id="btnAddVendor">Tambah Vendor</button>
+              </div>
+            </form>
+            <div class="master-list-wrap">
+              <span class="field-label">VENDOR TERDAFTAR (<span id="masterVendorCount">0</span>)</span>
+              <div id="masterVendorList" class="master-chip-list"></div>
+            </div>
           </div>
         </div>
       </section>
