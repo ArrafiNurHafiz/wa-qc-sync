@@ -17,6 +17,10 @@ test("CorrectionStore hanya mengembalikan konfirmasi milik pengirim yang sama", 
   assert.equal(store.consume("group@g.us", "sender-b", "AB12CD"), null);
   assert.deepEqual(store.consume("group@g.us", "sender-a", "ab12cd"), { type: "QC_REPORT" });
   assert.equal(store.consume("group@g.us", "sender-a", "AB12CD"), null);
+
+  // Multi-device JID suffix (:1@s.whatsapp.net) tetap cocok dengan pengirim yang sama
+  const mdToken = store.create("group@g.us", "628123456:2@s.whatsapp.net", { type: "QC_ITEM_APPEND" });
+  assert.deepEqual(store.consume("group@g.us", "628123456@s.whatsapp.net", mdToken), { type: "QC_ITEM_APPEND" });
 });
 
 test("CorrectionStore menolak token kedaluwarsa (> 5 menit)", () => {

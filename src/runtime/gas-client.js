@@ -25,12 +25,26 @@ export async function sendToGasWebhook(action, data = {}, options = {}) {
     payload.apiSecret = apiSecret;
   }
 
-  const response = await axios.post(gasUrl, payload, {
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    timeout: options.timeout ?? 30000,
-    maxRedirects: 5
-  });
-  return response.data;
+  const maxAttempts = options.retries ?? 2;
+  let lastErr = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await axios.post(gasUrl, payload, {
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        timeout: options.timeout ?? 60000,
+        maxRedirects: 5
+      });
+      return response.data;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxAttempts && isRetryableGasError(err)) {
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
 }
 
 export async function checkGasStatus(options = {}) {

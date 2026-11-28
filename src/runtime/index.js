@@ -48,52 +48,17 @@ export function buildQcWebhookPayload(report, { senderName = "-", idempotencyKey
   };
 }
 
-export function formatQcReplyMessage(report, gasResult = {}, { corrected = false, fromQueue = false, appendMode = false, itemNumber = 1 } = {}) {
-  const title = appendMode
-    ? `✅ *ITEM #${itemNumber} DITAMBAHKAN KE LAPORAN*`
+export function formatQcReplyMessage(report, gasResult = {}, { appendMode = false, itemNumber = 1, fromQueue = false } = {}) {
+  const statusLine = appendMode
+    ? `✅ *Laporan diterima (Item #${itemNumber} ditambahkan).*`
     : fromQueue
-      ? "✅ *LAPORAN QC OFFLINE BERHASIL DICATAT*"
-      : "✅ *LAPORAN QC BERHASIL DICATAT*";
+      ? "✅ *Laporan diterima (dari antrean).* "
+      : "✅ *Laporan diterima.*";
 
-  const lines = [
-    title,
-    "━━━━━━━━━━━━━━━━━━━━",
-    `📄 No. Laporan : *${gasResult.noLaporan || report.noLaporan}*`,
-    `🏭 Vendor      : *${report.vendor}* (PO: ${report.noDokumenPo || "-"})`,
-    `📅 Tanggal     : ${report.tanggalPemeriksaan}`,
-    `📦 Total Item  : ${report.totalItem} item | Diperiksa: *${report.totalDiperiksa} pcs*`,
-    `❌ Total Rusak : *${report.totalRusak} pcs*`,
-    `✅ Lolos/Terima: *${report.totalLolos} pcs*`,
-    `🏷️ Keputusan   : *${report.keputusanUmum}*`
-  ];
-
-  if (Array.isArray(report.items)) {
-    lines.push("");
-    report.items.forEach((it, idx) => {
-      const defectTxt = it.rusak?.length
-        ? it.rusak.map((r) => `${r.shortLabel || r.label} ${r.qty}`).join(", ")
-        : "Mulus";
-      lines.push(`${idx + 1}. *${it.namaItem}* (${it.kodeRawBody || "-"}): Periksa ${it.qtyDiperiksa} → Lolos ${it.qtyLolos} [${it.keputusan}] (${defectTxt})`);
-    });
-  }
-
+  const lines = [statusLine.trim()];
   if (gasResult.sheetUrl) {
-    lines.push("", `📊 Google Sheet : ${gasResult.sheetUrl}`);
+    lines.push(`📊 Sheet: ${gasResult.sheetUrl}`);
   }
-  if (gasResult.pdfUrl) {
-    lines.push(`📑 File PDF     : ${gasResult.pdfUrl}`);
-  }
-  if (gasResult.duplicate) {
-    lines.push("ℹ️ _Catatan: Laporan dengan ID sama sudah tercatat sebelumnya (idempoten)._");
-  }
-  if (corrected) {
-    lines.push("⚠️ _Nama produk/vendor disesuaikan otomatis dari kamus master._");
-  }
-  if (!fromQueue) {
-    const nextIdx = appendMode ? itemNumber + 1 : ((report.totalItem || report.items?.length || 1) + 1);
-    lines.push("", `💡 _Lanjut item ke-${nextIdx}? Kirim *[ITEM ${nextIdx}]* (atau ketik *qc${nextIdx}*). Laporan baru: ketik *qc*._`);
-  }
-
   return lines.join("\n");
 }
 
@@ -429,136 +394,201 @@ export async function processQueuedMessages(deps) {
 // --- Runtime Stateful Baileys ---
 const correctionStore = new CorrectionStore();
 const messageStore = new Map();
+const processedMessageIds = new Set();
 let currentSock = null;
 let queueWorkerInterval = null;
 let webBridge = null;
+let isStartingBot = false;
+let reconnectTimer = null;
+let reconnectAttempts = 0;
+
+function scheduleBotReconnect(delayMs) {
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    void startBot();
+  }, delayMs);
+}
 
 export async function startBot() {
-  if (queueWorkerInterval) {
-    clearInterval(queueWorkerInterval);
-    queueWorkerInterval = null;
-  }
+  if (isStartingBot) return;
+  isStartingBot = true;
 
-  if (currentSock) {
+  try {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    if (queueWorkerInterval) {
+      clearInterval(queueWorkerInterval);
+      queueWorkerInterval = null;
+    }
+
+    if (currentSock) {
+      try {
+        currentSock.ev.removeAllListeners();
+        currentSock.end(new Error("Bot restarting"));
+      } catch (_) {}
+      currentSock = null;
+    }
+
+    const { state, saveCreds } = await useMultiFileAuthState(getAuthDir());
+    const authPersistence = createAuthPersistence(saveCreds);
+    let version;
     try {
-      currentSock.ev.removeAllListeners();
-      currentSock.end(new Error("Bot restarting"));
-    } catch (_) {}
-    currentSock = null;
-  }
-
-  const { state, saveCreds } = await useMultiFileAuthState(getAuthDir());
-  const authPersistence = createAuthPersistence(saveCreds);
-  const { version } = await fetchLatestBaileysVersion();
-
-  const sock = makeWASocket({
-    version,
-    logger: pino({ level: process.env.DEBUG === "true" ? "debug" : "silent" }),
-    auth: state,
-    printQRInTerminal: false,
-    getMessage: async (key) => {
-      const msgKey = `${key.remoteJid}:${key.id}`;
-      return messageStore.get(msgKey)?.message || undefined;
-    }
-  });
-  currentSock = sock;
-
-  sock.ev.on("connection.update", async (update) => {
-    const { connection, lastDisconnect, qr } = update;
-
-    if (qr) {
-      console.log("\n[QR CODE] Pindai kode QR di bawah atau lewat Web Command Center:");
-      qrcode.generate(qr, { small: true });
-      webBridge?.updateWebQR(qr);
+      const latest = await Promise.race([
+        fetchLatestBaileysVersion(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout versi WA")), 8000))
+      ]);
+      version = latest?.version;
+    } catch (_) {
+      version = undefined;
     }
 
-    if (connection === "close") {
-      const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const isLoggedOut = statusCode === DisconnectReason.loggedOut;
-      const isReplaced = statusCode === DisconnectReason.connectionReplaced;
-
-      console.log(`[KONEKSI] Terputus (Status: ${statusCode}).`);
-      webBridge?.updateWebStatus("Disconnected");
-
-      if (isLoggedOut || isReplaced) {
-        console.log("[KONEKSI] Sesi berakhir/diganti. Membersihkan auth dan restart...");
-        await authPersistence.beginReset();
-        sock.ev.removeAllListeners();
-        try {
-          fs.rmSync(getAuthDir(), { recursive: true, force: true });
-        } catch (_) {}
-        setTimeout(() => void startBot(), 2000);
-      } else {
-        setTimeout(() => void startBot(), 3000);
+    const sock = makeWASocket({
+      ...(version ? { version } : {}),
+      logger: pino({ level: process.env.DEBUG === "true" ? "debug" : "silent" }),
+      auth: state,
+      printQRInTerminal: false,
+      connectTimeoutMs: 30000,
+      keepAliveIntervalMs: 25000,
+      getMessage: async (key) => {
+        const msgKey = `${key.remoteJid}:${key.id}`;
+        return messageStore.get(msgKey)?.message || undefined;
       }
-    } else if (connection === "open") {
-      console.log("\n[KONEKSI] Bot WhatsApp QC KWaS terhubung.");
-      webBridge?.updateWebStatus("Connected", sock.user);
+    });
+    currentSock = sock;
 
-      syncDictionaryFromWebhook(appConfig.get("GAS_QC_WEBHOOK_URL")).catch(() => {});
-      MessageQueue.cleanup();
-      await processQueuedMessages({
-        sock,
-        queue: MessageQueue.getDefault(),
-        notifyDataMutation: () => webBridge?.notifyDataMutation()
-      });
+    sock.ev.on("connection.update", async (update) => {
+      const { connection, lastDisconnect, qr } = update;
 
-      if (!queueWorkerInterval) {
-        let busy = false;
-        queueWorkerInterval = setInterval(async () => {
-          if (currentSock && currentSock.user && !busy && MessageQueue.getPendingMessages().length > 0) {
-            busy = true;
-            try {
-              await processQueuedMessages({
-                sock: currentSock,
-                queue: MessageQueue.getDefault(),
-                notifyDataMutation: () => webBridge?.notifyDataMutation()
-              });
-            } catch (err) {
-              console.error("[QUEUE RETRY ERROR]", err.message);
-            } finally {
-              busy = false;
-            }
-          }
-        }, 30000);
+      if (qr) {
+        console.log("\n[QR CODE] Pindai kode QR di bawah atau lewat Web Command Center:");
+        qrcode.generate(qr, { small: true });
+        webBridge?.updateWebQR(qr);
       }
-    }
-  });
 
-  sock.ev.on("creds.update", () => {
-    void authPersistence.queueSave();
-  });
+      if (connection === "close") {
+        const statusCode = lastDisconnect?.error?.output?.statusCode;
+        const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+        const isReplaced = statusCode === DisconnectReason.connectionReplaced;
 
-  sock.ev.on("messages.upsert", async ({ messages }) => {
-    for (const msg of messages) {
-      if (msg.key && msg.message) {
-        const msgKey = `${msg.key.remoteJid}:${msg.key.id}`;
-        messageStore.set(msgKey, msg);
-        if (messageStore.size > 1000) {
-          messageStore.delete(messageStore.keys().next().value);
+        console.log(`[KONEKSI] Terputus (Status: ${statusCode}).`);
+        webBridge?.updateWebStatus("Disconnected");
+
+        if (isLoggedOut) {
+          console.log("[KONEKSI] Sesi logout. Membersihkan auth dan restart...");
+          await authPersistence.beginReset();
+          sock.ev.removeAllListeners();
+          try {
+            fs.rmSync(getAuthDir(), { recursive: true, force: true });
+          } catch (_) {}
+          reconnectAttempts = 0;
+          scheduleBotReconnect(2000);
+        } else if (isReplaced) {
+          console.log("[KONEKSI] Sesi digantikan di perangkat/proses lain. Menunggu 10 detik sebelum reconnect...");
+          reconnectAttempts = Math.min(reconnectAttempts + 1, 5);
+          scheduleBotReconnect(10000);
+        } else {
+          reconnectAttempts = Math.min(reconnectAttempts + 1, 5);
+          const backoffMs = Math.min(3000 * Math.pow(1.5, reconnectAttempts - 1), 30000);
+          scheduleBotReconnect(Math.round(backoffMs));
         }
-      }
+      } else if (connection === "open") {
+        reconnectAttempts = 0;
+        console.log("\n[KONEKSI] Bot WhatsApp QC KWaS terhubung.");
+        webBridge?.updateWebStatus("Connected", sock.user);
 
-      if (msg.key?.fromMe || !msg.message) continue;
-
-      const chatJid = msg.key.remoteJid;
-      const participant = msg.key.participant || msg.participant || chatJid;
-      const senderNumber = participant.split("@")[0].replace(/\D/g, "");
-      const senderName = msg.pushName ? `${msg.pushName} (+${senderNumber})` : `+${senderNumber}`;
-      const text = extractMessageText(msg);
-
-      await handleIncomingTextMessage(
-        { chatJid, participant, senderName, text, messageId: msg.key.id, rawMsg: msg },
-        {
+        syncDictionaryFromWebhook(
+          appConfig.get("GAS_QC_WEBHOOK_URL"),
+          null,
+          appConfig.get("API_SECRET")
+        ).catch(() => {});
+        MessageQueue.cleanup();
+        await processQueuedMessages({
           sock,
-          correctionStore,
           queue: MessageQueue.getDefault(),
-          allowedGroups: appConfig.get("ALLOWED_GROUPS"),
           notifyDataMutation: () => webBridge?.notifyDataMutation()
+        });
+
+        if (!queueWorkerInterval) {
+          let busy = false;
+          queueWorkerInterval = setInterval(async () => {
+            if (currentSock && currentSock.user && !busy && MessageQueue.getPendingMessages().length > 0) {
+              busy = true;
+              try {
+                await processQueuedMessages({
+                  sock: currentSock,
+                  queue: MessageQueue.getDefault(),
+                  notifyDataMutation: () => webBridge?.notifyDataMutation()
+                });
+              } catch (err) {
+                console.error("[QUEUE RETRY ERROR]", err.message);
+              } finally {
+                busy = false;
+              }
+            }
+          }, 30000);
         }
-      );
-    }
-  });
+      }
+    });
+
+    sock.ev.on("creds.update", () => {
+      void authPersistence.queueSave();
+    });
+
+    sock.ev.on("messages.upsert", async ({ messages, type }) => {
+      if (type && type !== "notify") return;
+
+      for (const msg of messages) {
+        if (msg.key && msg.message) {
+          const msgKey = `${msg.key.remoteJid}:${msg.key.id}`;
+          messageStore.set(msgKey, msg);
+          if (messageStore.size > 1000) {
+            messageStore.delete(messageStore.keys().next().value);
+          }
+        }
+
+        if (msg.key?.fromMe || !msg.message) continue;
+
+        const dedupKey = msg.key?.id ? `${msg.key.remoteJid}:${msg.key.id}` : "";
+        if (dedupKey) {
+          if (processedMessageIds.has(dedupKey)) continue;
+          processedMessageIds.add(dedupKey);
+          if (processedMessageIds.size > 1000) {
+            processedMessageIds.delete(processedMessageIds.values().next().value);
+          }
+        }
+
+        const chatJid = msg.key.remoteJid;
+        const participant = msg.key.participant || msg.participant || chatJid;
+        const senderNumber = participant.split("@")[0].replace(/\D/g, "");
+        const senderName = msg.pushName ? `${msg.pushName} (+${senderNumber})` : `+${senderNumber}`;
+        const text = extractMessageText(msg);
+
+        try {
+          await handleIncomingTextMessage(
+            { chatJid, participant, senderName, text, messageId: msg.key.id, rawMsg: msg },
+            {
+              sock,
+              correctionStore,
+              queue: MessageQueue.getDefault(),
+              allowedGroups: appConfig.get("ALLOWED_GROUPS"),
+              notifyDataMutation: () => webBridge?.notifyDataMutation()
+            }
+          );
+        } catch (msgErr) {
+          console.error("[MESSAGE HANDLER ERROR]", msgErr?.message || msgErr);
+        }
+      }
+    });
+  } catch (err) {
+    console.error("[KONEKSI] Gagal inisialisasi bot WA:", err?.message || err);
+    reconnectAttempts = Math.min(reconnectAttempts + 1, 5);
+    scheduleBotReconnect(5000);
+  } finally {
+    isStartingBot = false;
+  }
 }
 
 export async function bootstrap(options = {}) {

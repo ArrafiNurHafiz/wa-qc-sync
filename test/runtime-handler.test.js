@@ -180,7 +180,8 @@ test("router WhatsApp mendukung alur berurutan FORM QC ([ITEM 1]) -> [ITEM 2] (A
     }, deps);
     assert.equal(ctx.gasCalls[0].action, "LOG_QC_REPORT");
     const noLap1 = ctx.gasCalls[0].data.noLaporan;
-    assert.match(ctx.sentMessages[0].content.text, /\[ITEM 2\]/);
+    assert.match(ctx.sentMessages[0].content.text, /Laporan diterima/i);
+    assert.match(ctx.sentMessages[0].content.text, /spreadsheets\/d\/sheet-file-1/);
 
     // 2. Lanjut Item 2 tanpa tulis ulang FORM QC / Vendor / PO
     await handleIncomingTextMessage({
@@ -194,7 +195,8 @@ test("router WhatsApp mendukung alur berurutan FORM QC ([ITEM 1]) -> [ITEM 2] (A
     assert.equal(ctx.gasCalls[1].data.noLaporan, noLap1);
     assert.equal(ctx.gasCalls[1].data.fileId, "sheet-file-1");
     assert.equal(ctx.gasCalls[1].data.item.namaItem, "Mangkok");
-    assert.match(ctx.sentMessages[1].content.text, /ITEM #2 DITAMBAHKAN/i);
+    assert.match(ctx.sentMessages[1].content.text, /Laporan diterima \(Item #2/i);
+    assert.match(ctx.sentMessages[1].content.text, /spreadsheets\/d\/sheet-file-1/);
 
     // 3. Mulai kunjungan baru via FORM QC lagi
     await handleIncomingTextMessage({

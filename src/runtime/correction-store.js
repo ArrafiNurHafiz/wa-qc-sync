@@ -10,7 +10,8 @@ export class CorrectionStore {
   }
 
   key(chatJid, participant) {
-    return `${chatJid}:${participant}`;
+    const cleanParticipant = String(participant || "").replace(/:\d+(?=@)/, "");
+    return `${chatJid}:${cleanParticipant}`;
   }
 
   create(chatJid, participant, value) {
