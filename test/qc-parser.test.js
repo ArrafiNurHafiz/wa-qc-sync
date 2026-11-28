@@ -153,8 +153,8 @@ test("parseQcMessage template 1 item dan lanjutan [ITEM 2] berurutan", () => {
   const filled1 = tpl
     .replace("Vendor   : ", "Vendor   : Londo")
     .replace("PO       : ", "PO       : PO-4-01")
-    .replace("[ITEM 1]\nBarang   : \nTahap    : Unfinish\nPeriksa  : \nMC %     : ", "[ITEM 1]\nBarang   : Sendok Oval\nTahap    : Unfinish\nPeriksa  : 100\nMC %     : 13.5")
-    .replace("\nKeputusan: ", "\nKeputusan: Tolak");
+    .replace("[ITEM 1]\nNama Barang   : \nTahap    : Unfinish\nJumlah  : \nMC %     : ", "[ITEM 1]\nNama Barang   : Sendok Oval\nTahap    : Unfinish\nJumlah  : 100\nMC %     : 13.5")
+    .replace("\nKeputusan: Lolos / Bersyarat / Tolak", "\nKeputusan: Tolak");
 
   const res1 = parseQcMessage(filled1);
   assert.equal(res1.error, undefined);
@@ -166,9 +166,9 @@ test("parseQcMessage template 1 item dan lanjutan [ITEM 2] berurutan", () => {
   assert.equal(res1.report.items[0].keputusan, "Tolak");
 
   const tpl2 = getQcItemTemplateText(2)
-    .replace("Barang   : \nTahap    : Unfinish\nPeriksa  : \nMC %     : ", "Barang   : Talenan Jepang\nTahap    : Unfinish\nPeriksa  : 50\nMC %     : 12.0")
+    .replace("Nama Barang   : \nTahap    : Unfinish\nJumlah  : \nMC %     : ", "Nama Barang   : Talenan Jepang\nTahap    : Unfinish\nJumlah  : 50\nMC %     : 12.0")
     .replace("Crack       : ", "Crack       : 5")
-    .replace("\nKeputusan: ", "\nKeputusan: Bersyarat");
+    .replace("\nKeputusan: Lolos / Bersyarat / Tolak", "\nKeputusan: Bersyarat");
 
   // Tanpa sesi aktif sebelumnya harus ditolak dengan panduan
   const noSession = parseQcMessage(tpl2);

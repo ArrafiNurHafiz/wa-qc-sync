@@ -35,6 +35,8 @@ const ITEM_KEY_MAP = new Map([
   ["tahapbarang", "tahap"],
   ["periksa", "periksa"],
   ["diperiksa", "periksa"],
+  ["jumlah", "periksa"],
+  ["jumlahbarang", "periksa"],
   ["jumlahdiperiksa", "periksa"],
   ["qty", "periksa"],
   ["mc", "mc"],

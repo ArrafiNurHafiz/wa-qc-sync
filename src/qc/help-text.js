@@ -3,12 +3,11 @@ import { QC_CRITERIA, MC_LIMITS } from "./dictionary.js";
 
 function buildTemplateItemBlock(index) {
   return `[ITEM ${index}]
-Barang   : 
+Nama Barang   : 
 Tahap    : Unfinish
-Periksa  : 
+Jumlah  : 
 MC %     : 
 
-[Isi angka rusak, kosong = aman, "-" = T/B]
 [1. CACAT PERMUKAAN & SERAT]
 Ati         : 
 Pulur       : 
@@ -32,8 +31,7 @@ Lubang      :
 Lainnya     : 
 
 Catatan  : 
-[Keputusan: Lolos / Bersyarat / Tolak]
-Keputusan: `;
+Keputusan: Lolos / Bersyarat / Tolak`;
 }
 
 export function getQcItemTemplateText(itemNumber = 2) {
