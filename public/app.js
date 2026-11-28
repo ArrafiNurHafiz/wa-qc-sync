@@ -235,7 +235,10 @@ document.addEventListener("keydown", (e) => {
 });
 
 // --- Gateway WA & Protocol Guide ---
+let isPollingWa = false;
 async function pollWaStatus() {
+  if (isPollingWa || document.hidden) return;
+  isPollingWa = true;
   try {
     const res = await fetch("/api/wa/status");
     const data = await res.json();
@@ -280,6 +283,9 @@ async function pollWaStatus() {
       pendingChamber.classList.remove("hidden");
     }
   } catch (_) {}
+  finally {
+    isPollingWa = false;
+  }
 }
 
 function renderProtoSnippet() {
@@ -1235,6 +1241,9 @@ async function loadSettings() {
       document.getElementById("apiSecretBadge").classList.toggle("hidden", !json.config.hasApiSecret);
     }
   } catch (_) {}
+  finally {
+    isPollingWa = false;
+  }
 }
 
 function renderQueueStatus(q) {
@@ -1266,6 +1275,9 @@ async function loadQueueStatus() {
     const json = await fetch("/api/queue/status").then((r) => r.json());
     if (json.success) renderQueueStatus(json);
   } catch (_) {}
+  finally {
+    isPollingWa = false;
+  }
 }
 
 document.getElementById("btnTestGas")?.addEventListener("click", async () => {
@@ -1534,6 +1546,9 @@ async function init() {
   loadReports();
 
   setInterval(pollWaStatus, 3000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) void pollWaStatus();
+  });
 }
 
 init();

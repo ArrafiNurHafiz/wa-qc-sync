@@ -87,7 +87,9 @@ export function createWebApp(deps = {}) {
   let dashboardCache = null;
   let dashboardCacheTime = 0;
   let cachedMutationVersion = 0;
-  const CACHE_TTL_MS = 15000;
+  let cachedQrRaw = null;
+  let cachedQrDataUrl = null;
+  const CACHE_TTL_MS = 30000;
 
   function bumpMutation() {
     waState.dataMutationVersion++;
@@ -95,6 +97,13 @@ export function createWebApp(deps = {}) {
   }
 
   const app = express();
+  app.disable("x-powered-by");
+  app.use((req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    next();
+  });
   app.use(express.json({ limit: "2mb" }));
   app.use(express.urlencoded({ extended: true }));
   app.use(express.static(publicDir));
@@ -236,9 +245,15 @@ export function createWebApp(deps = {}) {
   app.get("/api/wa/status", async (req, res) => {
     let qrDataUrl = null;
     if (waState.currentQR && waState.connectionStatus !== "Connected") {
-      try {
-        qrDataUrl = await QRCode.toDataURL(waState.currentQR);
-      } catch (_) {}
+      if (waState.currentQR === cachedQrRaw && cachedQrDataUrl) {
+        qrDataUrl = cachedQrDataUrl;
+      } else {
+        try {
+          qrDataUrl = await QRCode.toDataURL(waState.currentQR);
+          cachedQrRaw = waState.currentQR;
+          cachedQrDataUrl = qrDataUrl;
+        } catch (_) {}
+      }
     }
 
     res.json({
