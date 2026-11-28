@@ -240,6 +240,27 @@ test("router WhatsApp mendukung alur berurutan FORM QC ([ITEM 1]) -> [ITEM 2] (A
     assert.equal(gidRes.handled, true);
     assert.equal(gidRes.command, "GROUP_ID");
     assert.equal(gidRes.chatJid, "120363999888@g.us");
+
+    // 6. Typo sedang meminta balas #OKQC tanpa token lalu diproses saat #OKQC dikirim
+    const typoPrompt = await handleIncomingTextMessage({
+      chatJid: "1203630001@g.us",
+      participant: "62812@s.whatsapp.net",
+      senderName: "Budi (+62812)",
+      text: "FORM QC\nVendor: Widodo Kltn\nBarang: Sendok Oval\nPeriksa: 30\nKeputusan: Lolos",
+      messageId: "s7"
+    }, deps);
+    assert.equal(typoPrompt.requiresConfirmation, true);
+    assert.match(ctx.sentMessages[ctx.sentMessages.length - 1].content.text, /#OKQC/);
+
+    const okQcRes = await handleIncomingTextMessage({
+      chatJid: "1203630001@g.us",
+      participant: "62812@s.whatsapp.net",
+      senderName: "Budi (+62812)",
+      text: "#OKQC",
+      messageId: "s8"
+    }, deps);
+    assert.equal(okQcRes.handled, true);
+    assert.equal(okQcRes.success, true);
   } finally {
     rmSync(ctx.dir, { recursive: true, force: true });
   }

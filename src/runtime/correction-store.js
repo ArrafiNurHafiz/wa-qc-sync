@@ -24,14 +24,19 @@ export class CorrectionStore {
     return token;
   }
 
-  consume(chatJid, participant, token) {
+  consume(chatJid, participant, token = null) {
     const k = this.key(chatJid, participant);
     const entry = this.entries.get(k);
-    if (!entry || entry.expiresAt < this.now() || entry.token !== String(token || "").toUpperCase()) {
+    if (!entry || entry.expiresAt < this.now()) {
       if (entry && entry.expiresAt < this.now()) {
         this.entries.delete(k);
       }
       return null;
+    }
+    if (token !== null && token !== undefined && String(token).trim() !== "") {
+      if (entry.token !== String(token).trim().toUpperCase()) {
+        return null;
+      }
     }
     this.entries.delete(k);
     return entry.value;

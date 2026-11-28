@@ -112,19 +112,22 @@ export async function handleIncomingTextMessage(
 
   if (!isChatAllowed(chatJid, allowedGroups)) return { handled: false, reason: "not_whitelisted" };
 
-  // Cek konfirmasi #OKQC <6-HEX> atau #OK <6-HEX> (kompatibel berbagi nomor dengan produksi-kwas)
-  const confirmMatch = trimmed.match(/^#OK(QC)?\s+([A-Z0-9]{6})$/i);
+  // Cek konfirmasi #OKQC (tanpa token) atau #OKQC/#OK <6-HEX>
+  const confirmMatch = trimmed.match(/^#OK(QC)?(?:\s+([A-Z0-9]{6}))?$/i);
   let confirmedParsed = null;
   if (confirmMatch) {
     const isExplicitQc = Boolean(confirmMatch[1]);
-    confirmedParsed = correctionStore.consume(chatJid, participant, confirmMatch[2]);
+    const tokenArg = confirmMatch[2] || null;
+    confirmedParsed = (isExplicitQc || tokenArg)
+      ? correctionStore.consume(chatJid, participant, tokenArg)
+      : null;
     if (!confirmedParsed) {
       if (!isExplicitQc) {
         return { handled: false, reason: "ok_for_other_bot" };
       }
       await sock.sendMessage(
         chatJid,
-        { text: "⚠️ Kode konfirmasi QC tidak ditemukan atau sudah kedaluwarsa (5 menit). Kirim ulang laporan FORM QC." },
+        { text: "⚠️ Tidak ada konfirmasi QC yang tertunda atau sudah kedaluwarsa (5 menit). Kirim ulang laporan FORM QC." },
         replyOpts
       );
       return { handled: true, command: "OK_INVALID" };
@@ -243,7 +246,7 @@ export async function handleIncomingTextMessage(
   }
 
   if (parsed.requires_confirmation && !confirmedParsed) {
-    const token = correctionStore.create(chatJid, participant, parsed);
+    correctionStore.create(chatJid, participant, parsed);
     const corrections = parsed.corrections
       .map((item) => `• ${item.field}: "${item.original}" → *${item.suggested}*`)
       .join("\n");
@@ -252,11 +255,11 @@ export async function handleIncomingTextMessage(
       {
         text:
           `⚠️ *KONFIRMASI KOREKSI NAMA*\n━━━━━━━━━━━━━━━━━━━━\n${corrections}\n\n` +
-          `Laporan belum dikirim ke Google Drive.\nBalas: *#OKQC ${token}*\n_Berlaku selama 5 menit._`
+          `Balas: *#OKQC* _(berlaku 5 menit)_`
       },
       replyOpts
     );
-    return { handled: true, requiresConfirmation: true, token };
+    return { handled: true, requiresConfirmation: true };
   }
 
   // Bangun payload GAS LOG_QC_REPORT atau APPEND_QC_ITEM
