@@ -97,20 +97,34 @@ export async function handleIncomingTextMessage(
   } = deps;
 
   if (!text || !isQcRelevantMessage(text)) return { handled: false, reason: "irrelevant" };
-  if (!isChatAllowed(chatJid, allowedGroups)) return { handled: false, reason: "not_whitelisted" };
-
   const replyOpts = rawMsg ? { quoted: rawMsg } : undefined;
   const trimmed = text.trim();
 
-  // Cek konfirmasi #OK <6-HEX>
-  const confirmMatch = trimmed.match(/^#OK\s+([A-Z0-9]{6})$/i);
+  if (/^#(?:QC)?GROUPID\b/i.test(trimmed)) {
+    const label = chatJid.endsWith("@g.us") ? "ID Grup WhatsApp" : "ID Chat WhatsApp";
+    await sock.sendMessage(
+      chatJid,
+      { text: `🆔 *${label}:*\n\`${chatJid}\`\n\n_Salin ID di atas ke Pengaturan → Whitelist ID Grup WhatsApp._` },
+      replyOpts
+    );
+    return { handled: true, command: "GROUP_ID", chatJid };
+  }
+
+  if (!isChatAllowed(chatJid, allowedGroups)) return { handled: false, reason: "not_whitelisted" };
+
+  // Cek konfirmasi #OKQC <6-HEX> atau #OK <6-HEX> (kompatibel berbagi nomor dengan produksi-kwas)
+  const confirmMatch = trimmed.match(/^#OK(QC)?\s+([A-Z0-9]{6})$/i);
   let confirmedParsed = null;
   if (confirmMatch) {
-    confirmedParsed = correctionStore.consume(chatJid, participant, confirmMatch[1]);
+    const isExplicitQc = Boolean(confirmMatch[1]);
+    confirmedParsed = correctionStore.consume(chatJid, participant, confirmMatch[2]);
     if (!confirmedParsed) {
+      if (!isExplicitQc) {
+        return { handled: false, reason: "ok_for_other_bot" };
+      }
       await sock.sendMessage(
         chatJid,
-        { text: "⚠️ Kode konfirmasi tidak ditemukan atau sudah kedaluwarsa (5 menit). Kirim ulang laporan FORM QC." },
+        { text: "⚠️ Kode konfirmasi QC tidak ditemukan atau sudah kedaluwarsa (5 menit). Kirim ulang laporan FORM QC." },
         replyOpts
       );
       return { handled: true, command: "OK_INVALID" };
@@ -238,7 +252,7 @@ export async function handleIncomingTextMessage(
       {
         text:
           `⚠️ *KONFIRMASI KOREKSI NAMA*\n━━━━━━━━━━━━━━━━━━━━\n${corrections}\n\n` +
-          `Laporan belum dikirim ke Google Drive.\nBalas: *#OK ${token}*\n_Berlaku selama 5 menit._`
+          `Laporan belum dikirim ke Google Drive.\nBalas: *#OKQC ${token}*\n_Berlaku selama 5 menit._`
       },
       replyOpts
     );
@@ -447,6 +461,7 @@ export async function startBot() {
 
     const sock = makeWASocket({
       ...(version ? { version } : {}),
+      browser: ["KWaS QC Bot", "Chrome", "1.1.2"],
       logger: pino({ level: process.env.DEBUG === "true" ? "debug" : "silent" }),
       auth: state,
       printQRInTerminal: false,

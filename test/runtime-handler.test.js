@@ -208,6 +208,38 @@ test("router WhatsApp mendukung alur berurutan FORM QC ([ITEM 1]) -> [ITEM 2] (A
     }, deps);
     assert.equal(ctx.gasCalls[2].action, "LOG_QC_REPORT");
     assert.equal(ctx.gasCalls[2].data.vendor, "Janu");
+
+    // 4. #OK milik bot lain (tanpa QC) diabaikan diam-diam, sedangkan #OKQC tak dikenal membalas error
+    const otherOk = await handleIncomingTextMessage({
+      chatJid: "1203630001@g.us",
+      participant: "62812@s.whatsapp.net",
+      senderName: "Budi (+62812)",
+      text: "#ok d67498",
+      messageId: "s4"
+    }, deps);
+    assert.equal(otherOk.handled, false);
+
+    const badQcOk = await handleIncomingTextMessage({
+      chatJid: "1203630001@g.us",
+      participant: "62812@s.whatsapp.net",
+      senderName: "Budi (+62812)",
+      text: "#okqc d67498",
+      messageId: "s5"
+    }, deps);
+    assert.equal(badQcOk.handled, true);
+    assert.equal(badQcOk.command, "OK_INVALID");
+
+    // 5. #GROUPID / #QCGROUPID mengembalikan chatJid meskipun dari grup baru
+    const gidRes = await handleIncomingTextMessage({
+      chatJid: "120363999888@g.us",
+      participant: "62812@s.whatsapp.net",
+      senderName: "Budi (+62812)",
+      text: "#QCGROUPID",
+      messageId: "s6"
+    }, deps);
+    assert.equal(gidRes.handled, true);
+    assert.equal(gidRes.command, "GROUP_ID");
+    assert.equal(gidRes.chatJid, "120363999888@g.us");
   } finally {
     rmSync(ctx.dir, { recursive: true, force: true });
   }

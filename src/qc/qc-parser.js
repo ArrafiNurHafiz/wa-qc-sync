@@ -142,11 +142,15 @@ export function parseQcMessage(text, options = {}) {
     return { command: "QC_ITEM_TEMPLATE", itemNumber: Math.max(2, parseInt(itemTplMatch[1], 10) || 2) };
   }
 
-  // 2. Perintah bantu (#HELP, #KRITERIA, #PRODUK, #VENDOR, #STATUS)
-  if (upper.startsWith("#HELP")) return { command: "HELP" };
-  if (upper.startsWith("#KRITERIA")) return { command: "KRITERIA" };
-  if (upper.startsWith("#PRODUK")) return { command: "LIST_PRODUCTS" };
-  if (upper.startsWith("#STATUS")) return { command: "STATUS" };
+  // 2. Perintah bantu (#HELP/#QCHELP, #KRITERIA/#QCKRITERIA, #PRODUK/#QCPRODUK, #VENDOR/#QCVENDOR, #STATUS/#QCSTATUS, #GROUPID/#QCGROUPID)
+  if (upper.startsWith("#GROUPID") || upper.startsWith("#QCGROUPID")) return { command: "GROUP_ID" };
+  if (upper.startsWith("#HELP") || upper.startsWith("#QCHELP")) return { command: "HELP" };
+  if (upper.startsWith("#KRITERIA") || upper.startsWith("#QCKRITERIA")) return { command: "KRITERIA" };
+  if (upper.startsWith("#PRODUK") || upper.startsWith("#QCPRODUK")) return { command: "LIST_PRODUCTS" };
+  if (upper.startsWith("#STATUS") || upper.startsWith("#QCSTATUS")) return { command: "STATUS" };
+  if (upper.startsWith("#QCVENDOR")) {
+    return { command: "VENDOR", sub: trimmed.slice(9).trim() };
+  }
   if (upper.startsWith("#VENDOR")) {
     return { command: "VENDOR", sub: trimmed.slice(7).trim() };
   }
