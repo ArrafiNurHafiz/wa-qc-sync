@@ -169,7 +169,7 @@ export async function handleIncomingTextMessage(
       );
       return { handled: true, command: "LIST_PRODUCTS" };
     }
-    const listStr = PRODUCT_MASTER.map((p, idx) => `${idx + 1}. ${p.nama} (SKU: ${p.sku})`).join("\n");
+    const listStr = PRODUCT_MASTER.map((p, idx) => `${idx + 1}. ${p.nama}`).join("\n");
     await sock.sendMessage(
       chatJid,
       { text: `📦 *DAFTAR ${PRODUCT_MASTER.length} PRODUK RESMI KWaS:*\n\n${listStr}` },
