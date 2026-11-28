@@ -9,6 +9,7 @@ Periksa  :
 MC %     : 
 
 [Isi angka rusak, kosong = aman, "-" = T/B]
+[1. CACAT PERMUKAAN & SERAT]
 Ati         : 
 Pulur       : 
 Teter       : 
@@ -17,10 +18,14 @@ Bluestain   :
 Cutter Mark : 
 Gerinda     : 
 Serat Balik : 
+
+[2. TOLERANSI & PRESISI KONSTRUKSI]
 Ukuran      : 
 Kesikuan    : 
 Doreng      : 
 Crack       : 
+
+[3. KUALITAS AKHIR (SIAP KIRIM)]
 Warna       : 
 Kehalusan   : 
 Lubang      : 
@@ -114,8 +119,11 @@ Sistem otomatis menghitung *Total Rusak = 50* & *Lolos = 950*, memakai *Keputusa
 🧭 *Perintah Bantuan:*
 • *qc* / *#QC* — Kirim template FORM QC kosong (Item 1)
 • *qc2* — Kirim template lanjutan [ITEM 2] untuk kunjungan yang sama
-• *#KRITERIA* — Daftar 15 kriteria & batas MC
-• *#STATUS* — Cek koneksi bot & Google Apps Script
+• *#QCPRODUK* — Daftar produk resmi di database
+• *#QCVENDOR* — Daftar vendor rekanan di database
+• *#QCKRITERIA* — Daftar 15 kriteria & batas MC
+• *#QCSTATUS* — Cek koneksi bot & Google Apps Script
+• *#QCGROUPID* — Cek ID grup untuk whitelist
 
-_Catatan: Nama produk & vendor bebas diketik langsung (tidak memakai database master)._`;
+_Catatan: Nama produk & vendor divalidasi terhadap database (typo ringan dikoreksi otomatis, typo sedang konfirmasi via *#OKQC*)._`;
 }

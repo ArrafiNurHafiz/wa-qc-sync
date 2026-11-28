@@ -19,6 +19,9 @@ test("perintah qc / #QC kosong, qc2, dan perintah bantu mengembalikan command ya
   const tpl = getQcTemplateText();
   assert.match(tpl, /^FORM QC/m);
   assert.match(tpl, /\[ITEM 1\]/);
+  assert.match(tpl, /\[1\. CACAT PERMUKAAN & SERAT\]/);
+  assert.match(tpl, /\[2\. TOLERANSI & PRESISI KONSTRUKSI\]/);
+  assert.match(tpl, /\[3\. KUALITAS AKHIR \(SIAP KIRIM\)\]/);
   assert.doesNotMatch(tpl, /\[ITEM 2\]/);
   assert.doesNotMatch(tpl, /^---$/m);
   assert.equal(tpl.match(/^Keputusan:/gm)?.length, 1);
