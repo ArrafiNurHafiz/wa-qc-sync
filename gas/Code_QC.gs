@@ -403,7 +403,14 @@ function colIndexToLetter(colIdx) {
 }
 
 function buildGrafikSheetLayout(grafikSheet, vendorCount) {
-  if (!grafikSheet) return;
+  if (!grafikSheet) return false;
+  var lastDashRow = Math.max(2, vendorCount + 1);
+  var layoutTag = "v:" + lastDashRow;
+  var currentTag = String(grafikSheet.getRange(1, 1).getValue() || "");
+  if (currentTag === layoutTag && String(grafikSheet.getRange(1, 2).getValue() || "").indexOf("GRAFIK") === 0) {
+    return false;
+  }
+
   if (typeof grafikSheet.setHiddenGridlines === "function") {
     grafikSheet.setHiddenGridlines(true);
   }
@@ -433,7 +440,6 @@ function buildGrafikSheetLayout(grafikSheet, vendorCount) {
     grafikSheet.setRowHeight(5, 36);
   }
 
-  var lastDashRow = Math.max(2, vendorCount + 1);
   styleKpiCard(grafikSheet, 2, "TOTAL KUNJUNGAN", "=SUM(" + SHEET_NAMES.DASHBOARD + "!B2:B" + lastDashRow + ")", "#0f172a", "#,##0");
   styleKpiCard(grafikSheet, 5, "TOTAL DIPERIKSA (PCS)", "=SUM(" + SHEET_NAMES.DASHBOARD + "!C2:C" + lastDashRow + ")", "#0284c7", "#,##0");
   styleKpiCard(grafikSheet, 8, "TOTAL RUSAK (PCS)", "=SUM(" + SHEET_NAMES.DASHBOARD + "!D2:D" + lastDashRow + ")", "#e11d48", "#,##0");
@@ -446,20 +452,25 @@ function buildGrafikSheetLayout(grafikSheet, vendorCount) {
     "0.0%"
   );
 
-  // Tabel ringkas jenis kerusakan di bawah area grafik (B48:C64) untuk sumber Grafik Pareto Kerusakan
+  // Tabel ringkas jenis kerusakan di bawah area grafik (B48:C64) ditulis batch 1x
   var defectHeader = grafikSheet.getRange(48, 2, 1, 2);
   defectHeader.setValues([["Jenis Kerusakan", "Total Rusak (pcs)"]]);
   defectHeader.setFontWeight("bold");
   defectHeader.setBackground("#f1f5f9");
+  var defectRows = [];
   for (var i = 0; i < DEFECT_REKAP_COLUMNS.length; i++) {
-    var r = 49 + i;
     var dashCol = colIndexToLetter(7 + i);
-    grafikSheet.getRange(r, 2).setValue(DEFECT_REKAP_COLUMNS[i].label);
-    var cell = grafikSheet.getRange(r, 3);
-    var formula = "=SUM(" + SHEET_NAMES.DASHBOARD + "!" + dashCol + "2:" + dashCol + lastDashRow + ")";
-    if (typeof cell.setFormula === "function") cell.setFormula(formula);
-    else cell.setValue(formula);
+    defectRows.push([
+      DEFECT_REKAP_COLUMNS[i].label,
+      "=SUM(" + SHEET_NAMES.DASHBOARD + "!" + dashCol + "2:" + dashCol + lastDashRow + ")"
+    ]);
   }
+  grafikSheet.getRange(49, 2, defectRows.length, 2).setValues(defectRows);
+
+  var tagCell = grafikSheet.getRange(1, 1);
+  tagCell.setValue(layoutTag);
+  if (typeof tagCell.setFontColor === "function") tagCell.setFontColor("#ffffff");
+  return true;
 }
 
 function clearSheetCharts(sheet) {
@@ -473,19 +484,29 @@ function clearSheetCharts(sheet) {
 }
 
 function syncDashboardCharts(rekapSs, dashSheet, vendorCount) {
-  clearSheetCharts(dashSheet);
+  if (typeof dashSheet.getCharts === "function" && (dashSheet.getCharts() || []).length > 0) {
+    clearSheetCharts(dashSheet);
+  }
   if (!rekapSs) return;
 
   var grafikSheet = rekapSs.getSheetByName(SHEET_NAMES.GRAFIK);
   if (!grafikSheet) {
     grafikSheet = rekapSs.insertSheet(SHEET_NAMES.GRAFIK);
   }
-  clearSheetCharts(grafikSheet);
-  buildGrafikSheetLayout(grafikSheet, vendorCount);
+  var layoutChanged = buildGrafikSheetLayout(grafikSheet, vendorCount);
 
-  if (vendorCount <= 0) return;
+  if (vendorCount <= 0) {
+    clearSheetCharts(grafikSheet);
+    return;
+  }
   if (typeof grafikSheet.newChart !== "function" || typeof grafikSheet.insertChart !== "function") return;
   if (typeof Charts === "undefined" || !Charts.ChartType) return;
+
+  var existingCharts = typeof grafikSheet.getCharts === "function" ? (grafikSheet.getCharts() || []) : [];
+  if (!layoutChanged && existingCharts.length === 3) {
+    return;
+  }
+  clearSheetCharts(grafikSheet);
 
   var lastRow = vendorCount + 1;
 
